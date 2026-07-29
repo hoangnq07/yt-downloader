@@ -1,0 +1,46 @@
+{
+  "name": "yt-downloader-pro",
+  "version": "1.0.0",
+  "description": "YouTube Downloader Pro — Desktop app powered by yt-dlp",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "dist": "electron-builder --win nsis"
+  },
+  "build": {
+    "appId": "com.ytdownloader.pro",
+    "productName": "YT Downloader Pro",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "setup.js",
+      "renderer/**/*",
+      "bin/**/*"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "renderer/icon.png",
+      "forceCodeSigning": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "YT Downloader Pro"
+    }
+  },
+  "author": "Hoang",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^25.1.8"
+  }
+}
