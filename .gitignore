@@ -1,4 +1,14 @@
+# Dependencies
 node_modules/
+
+# Downloaded runtime tools
+bin/
+
+# Electron Builder output
 dist/
-bin/*.exe
+
+# Compiled binaries and logs
+*.exe
+*.exe~
+*.dll
 *.log

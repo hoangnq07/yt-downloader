@@ -64,12 +64,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   const btnCloseSettings = document.getElementById('btnCloseSettings');
   const themeCards = document.querySelectorAll('.theme-card');
 
-  const btnHistoryToggle = document.getElementById('btnHistoryToggle');
-  const historyDrawerOverlay = document.getElementById('historyDrawerOverlay');
-  const btnCloseHistory = document.getElementById('btnCloseHistory');
-  const btnClearHistory = document.getElementById('btnClearHistory');
-  const historyList = document.getElementById('historyList');
-  const historyBadge = document.getElementById('historyBadge');
+  const navBtnDownloader = document.getElementById('navBtnDownloader');
+  const navBtnManager = document.getElementById('navBtnManager');
+  const viewDownloader = document.getElementById('viewDownloader');
+  const viewManager = document.getElementById('viewManager');
+  const navQueueBadge = document.getElementById('navQueueBadge');
+  const subBtnActiveQueue = document.getElementById('subBtnActiveQueue');
+  const subBtnCompletedHistory = document.getElementById('subBtnCompletedHistory');
+  const subContentActiveQueue = document.getElementById('subContentActiveQueue');
+  const subContentCompletedHistory = document.getElementById('subContentCompletedHistory');
+  const activeQueueBadge = document.getElementById('activeQueueBadge');
+  const activeQueueList = document.getElementById('activeQueueList');
+  const managerHistoryList = document.getElementById('managerHistoryList');
+  const btnClearHistoryManager = document.getElementById('btnClearHistoryManager');
 
   const playlistCard = document.getElementById('playlistCard');
   const playlistTitle = document.getElementById('playlistTitle');
@@ -88,35 +95,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   let currentSubtasks = [];
 
-  function initSubtasks(tasks) {
-    currentSubtasks = tasks.map((t, idx) => ({ ...t, id: idx, status: idx === 0 ? 'active' : 'pending', statusText: idx === 0 ? 'Đang chạy' : 'Chờ' }));
-    renderSubtasks();
-  }
-
-  function updateSubtaskStatus(activeIndex, statusText = 'Đang chạy') {
-    currentSubtasks.forEach((st, idx) => {
-      if (idx < activeIndex) {
-        st.status = 'done';
-        st.statusText = '✔ Hoàn tất';
-      } else if (idx === activeIndex) {
-        st.status = 'active';
-        st.statusText = statusText;
-      } else {
-        st.status = 'pending';
-        st.statusText = 'Chờ...';
-      }
-    });
-    renderSubtasks();
-  }
-
-  function finishSubtasks() {
-    currentSubtasks.forEach(st => {
-      st.status = 'done';
-      st.statusText = '✔ Hoàn tất';
-    });
-    renderSubtasks();
-  }
-
   function renderSubtasks() {
     if (!subtaskList) return;
     subtaskList.innerHTML = '';
@@ -128,10 +106,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     currentSubtasks.forEach(st => {
       const div = document.createElement('div');
       div.className = `subtask-item ${st.status}`;
-      div.innerHTML = `
-        <span>${st.name}</span>
-        <span class="subtask-status">${st.statusText || 'Chờ...'}</span>
-      `;
+      const name = document.createElement('span');
+      name.textContent = st.name || '';
+      const status = document.createElement('span');
+      status.className = 'subtask-status';
+      status.textContent = st.statusText || 'Chờ...';
+      div.append(name, status);
       subtaskList.appendChild(div);
     });
   }
@@ -146,6 +126,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       historyTitle: 'Lịch sử tải xuống',
       settingsBtn: 'Cài đặt',
       historyBtn: 'Lịch sử tải xuống',
+      navDownloader: 'Tải xuống',
+      navManager: 'Quản lý & lịch sử',
+      queueTab: 'Đang tải & hàng đợi',
+      historyTab: 'Đã hoàn tất',
+      clearHistory: 'Xóa lịch sử',
       langLabel: 'Ngôn ngữ ứng dụng',
       themeLabel: 'Màu giao diện chủ đạo',
       urlPlaceholder: 'Dán link YouTube vào đây...',
@@ -154,8 +139,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       tabAudio: 'Audio',
       tabSubtitle: 'Phụ đề',
       tabThumbnail: 'Thumbnail',
+      tabMetadata: 'Metadata',
       tabBundle: 'Tải tất cả',
-      downloadBtn: 'Tải xuống',
+      downloadBtn: 'Thêm vào hàng đợi',
       cancelBtn: 'Hủy',
       subtasksLabel: 'Chi tiết',
       doneTitle: 'Tải xuống hoàn tất!',
@@ -167,6 +153,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       historyTitle: 'Download History',
       settingsBtn: 'Settings',
       historyBtn: 'History',
+      navDownloader: 'Downloader',
+      navManager: 'Downloads & history',
+      queueTab: 'Active & queued',
+      historyTab: 'Completed',
+      clearHistory: 'Clear history',
       langLabel: 'App Language',
       themeLabel: 'Accent Theme',
       urlPlaceholder: 'Paste YouTube link here...',
@@ -175,8 +166,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       tabAudio: 'Audio',
       tabSubtitle: 'Subtitles',
       tabThumbnail: 'Thumbnail',
+      tabMetadata: 'Metadata',
       tabBundle: 'Download All',
-      downloadBtn: 'Download',
+      downloadBtn: 'Add to queue',
       cancelBtn: 'Cancel',
       subtasksLabel: 'Details',
       doneTitle: 'Download Complete!',
@@ -186,8 +178,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
 
   function applyLanguage(lang) {
-    localStorage.setItem('lang', lang);
     const t = translations[lang] || translations.vi;
+    document.documentElement.lang = lang === 'en' ? 'en' : 'vi';
 
     langCards.forEach(card => {
       card.classList.toggle('active', card.dataset.lang === lang);
@@ -198,9 +190,22 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const btnSettingsText = document.querySelector('#btnSettingsToggle span');
     if (btnSettingsText) btnSettingsText.textContent = t.settingsBtn;
+    const settingsTitleText = document.querySelector('.modal-title span');
+    if (settingsTitleText) settingsTitleText.textContent = t.settingsTitle;
+    const langLabelText = document.querySelector('[data-i18n="langLabel"]');
+    if (langLabelText) langLabelText.textContent = t.langLabel;
+    const themeLabelText = document.querySelector('[data-i18n="themeLabel"]');
+    if (themeLabelText) themeLabelText.textContent = t.themeLabel;
 
-    const btnHistoryText = document.querySelector('#btnHistoryToggle span');
-    if (btnHistoryText) btnHistoryText.textContent = t.historyBtn;
+    const navDownloaderText = document.querySelector('#navBtnDownloader span');
+    if (navDownloaderText) navDownloaderText.textContent = t.navDownloader;
+    const navManagerText = document.querySelector('#navBtnManager > span:not(.nav-queue-badge)');
+    if (navManagerText) navManagerText.textContent = t.navManager;
+    const queueTabText = document.querySelector('#subBtnActiveQueue > span:not(.subnav-badge)');
+    if (queueTabText) queueTabText.textContent = t.queueTab;
+    const historyTabText = document.querySelector('#subBtnCompletedHistory span');
+    if (historyTabText) historyTabText.textContent = t.historyTab;
+    if (btnClearHistoryManager) btnClearHistoryManager.textContent = t.clearHistory;
 
     const tabVideoSpan = document.querySelector('#tabVideo span');
     if (tabVideoSpan) tabVideoSpan.textContent = t.tabVideo;
@@ -213,6 +218,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const tabThumbSpan = document.querySelector('#tabThumbnail span');
     if (tabThumbSpan) tabThumbSpan.textContent = t.tabThumbnail;
+
+    const tabMetadataSpan = document.querySelector('#tabMetadata span');
+    if (tabMetadataSpan) tabMetadataSpan.textContent = t.tabMetadata;
 
     const tabBundleSpan = document.querySelector('#tabBundle span');
     if (tabBundleSpan) tabBundleSpan.textContent = t.tabBundle;
@@ -230,13 +238,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (doneTitleEl) doneTitleEl.textContent = t.doneTitle;
   }
 
-  const savedLang = localStorage.getItem('lang') || 'vi';
-  applyLanguage(savedLang);
-
   langCards.forEach(card => {
-    card.addEventListener('click', () => {
+    card.addEventListener('click', async () => {
       const selectedLang = card.dataset.lang;
       applyLanguage(selectedLang);
+      currentSettings.language = selectedLang;
+      await persistSettings();
       showToast(selectedLang === 'en' ? 'Language switched to English!' : 'Đã đổi sang Tiếng Việt!', 'success');
     });
   });
@@ -257,129 +264,242 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function applyTheme(theme) {
     document.body.dataset.theme = theme;
-    localStorage.setItem('theme', theme);
     themeCards.forEach(card => {
       card.classList.toggle('active', card.dataset.theme === theme);
     });
   }
 
-  const savedTheme = localStorage.getItem('theme') || 'red';
-  applyTheme(savedTheme);
-
   themeCards.forEach(card => {
-    card.addEventListener('click', () => {
+    card.addEventListener('click', async () => {
       const themeName = card.dataset.theme;
       applyTheme(themeName);
+      currentSettings.theme = themeName;
+      await persistSettings();
       const name = card.querySelector('.theme-name')?.textContent || themeName;
       showToast(`Đã đổi màu giao diện sang ${name}!`, 'success');
     });
   });
 
-  // ═══ History Drawer ═══
+  // ═══ Main Navigation & Download Manager ═══
 
-  function getHistory() {
-    try {
-      return JSON.parse(localStorage.getItem('downloadHistory') || '[]');
-    } catch { return []; }
-  }
-
-  function saveHistory(list) {
-    localStorage.setItem('downloadHistory', JSON.stringify(list));
-    updateHistoryBadge();
-  }
-
-  function updateHistoryBadge() {
-    const history = getHistory();
-    if (historyBadge) {
-      if (history.length > 0) {
-        historyBadge.textContent = history.length;
-        historyBadge.classList.remove('hidden');
-      } else {
-        historyBadge.classList.add('hidden');
-      }
+  function setMainView(viewName) {
+    const showManager = viewName === 'manager';
+    navBtnDownloader?.classList.toggle('active', !showManager);
+    navBtnManager?.classList.toggle('active', showManager);
+    navBtnDownloader?.setAttribute('aria-selected', String(!showManager));
+    navBtnManager?.setAttribute('aria-selected', String(showManager));
+    viewDownloader?.classList.toggle('active', !showManager);
+    viewManager?.classList.toggle('active', showManager);
+    if (showManager) {
+      renderActiveQueue();
+      renderCompletedHistory();
     }
   }
 
-  function addHistoryItem(item) {
-    const history = getHistory();
-    history.unshift({
-      id: Date.now(),
-      title: item.title || 'Untitled',
-      type: item.type || 'video',
-      quality: item.quality || '',
-      format: item.format || '',
-      filePath: item.filePath || '',
-      thumbnail: item.thumbnail || '',
-      time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
-    });
-    saveHistory(history.slice(0, 50));
+  function setManagerSection(sectionName) {
+    const showHistory = sectionName === 'history';
+    subBtnActiveQueue?.classList.toggle('active', !showHistory);
+    subBtnCompletedHistory?.classList.toggle('active', showHistory);
+    subBtnActiveQueue?.setAttribute('aria-selected', String(!showHistory));
+    subBtnCompletedHistory?.setAttribute('aria-selected', String(showHistory));
+    subContentActiveQueue?.classList.toggle('active', !showHistory);
+    subContentCompletedHistory?.classList.toggle('active', showHistory);
+    if (showHistory) renderCompletedHistory();
+    else renderActiveQueue();
   }
 
-  function renderHistory() {
-    if (!historyList) return;
-    const history = getHistory();
-    if (history.length === 0) {
-      historyList.innerHTML = '<p class="history-empty">Chưa có lịch sử tải xuống nào</p>';
+  navBtnDownloader?.addEventListener('click', () => setMainView('downloader'));
+  navBtnManager?.addEventListener('click', () => setMainView('manager'));
+  subBtnActiveQueue?.addEventListener('click', () => setManagerSection('queue'));
+  subBtnCompletedHistory?.addEventListener('click', () => setManagerSection('history'));
+
+  function makeTaskThumbnail(source, altText = '') {
+    const image = document.createElement('img');
+    image.className = 'task-thumb';
+    image.alt = altText;
+    image.src = source || 'icon.png';
+    image.addEventListener('error', () => {
+      if (!image.src.endsWith('/icon.png') && !image.src.endsWith('\\icon.png')) {
+        image.src = 'icon.png';
+      }
+    }, { once: true });
+    return image;
+  }
+
+  function makeTaskButton(label, className, handler, title = '') {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = className;
+    button.textContent = label;
+    button.title = title || label;
+    button.addEventListener('click', handler);
+    return button;
+  }
+
+  function updateQueueBadges() {
+    const count = activeTasksMap.size + pendingTasks.length;
+    if (navQueueBadge) {
+      navQueueBadge.textContent = String(count);
+      navQueueBadge.classList.toggle('hidden', count === 0);
+    }
+    if (activeQueueBadge) activeQueueBadge.textContent = String(count);
+  }
+
+  function appendTaskInfo(card, task, isPending = false) {
+    const info = document.createElement('div');
+    info.className = 'task-info-group';
+
+    const title = document.createElement('div');
+    title.className = 'task-title';
+    title.textContent = task.title || 'Video YouTube';
+    title.title = title.textContent;
+
+    const meta = document.createElement('div');
+    meta.className = 'task-meta-row';
+    const type = document.createElement('span');
+    const typeText = String(task.type || 'video').toUpperCase();
+    const formatText = String(task.format || '').toUpperCase();
+    type.textContent = `${typeText}${formatText ? ` (${formatText})` : ''} • ${isPending ? 'Đang chờ' : (task.speed || '--')}`;
+    const progress = document.createElement('span');
+    const percent = Math.max(0, Math.min(Number(task.percent) || 0, 100));
+    progress.textContent = isPending ? 'Trong hàng đợi' : `${percent.toFixed(1)}% • ${task.eta || 'ETA: --'}`;
+    meta.append(type, progress);
+
+    const track = document.createElement('div');
+    track.className = 'task-progress-track';
+    const fill = document.createElement('div');
+    fill.className = 'task-progress-fill';
+    fill.style.width = `${isPending ? 0 : percent}%`;
+    track.appendChild(fill);
+    info.append(title, meta, track);
+    card.appendChild(info);
+  }
+
+  function renderActiveQueue() {
+    if (!activeQueueList) return;
+    activeQueueList.replaceChildren();
+    const runningTasks = Array.from(activeTasksMap.values());
+
+    if (pendingTasks.length === 0 && runningTasks.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'queue-empty';
+      empty.textContent = 'Chưa có tác vụ tải nào';
+      activeQueueList.appendChild(empty);
       return;
     }
 
-    historyList.innerHTML = '';
-    history.forEach((item, index) => {
-      const el = document.createElement('div');
-      el.className = 'history-item';
-      el.innerHTML = `
-        <img class="history-thumb" src="${item.thumbnail || ''}" alt="">
-        <div class="history-details">
-          <div class="history-item-title" title="${item.title}">${item.title}</div>
-          <div class="history-item-meta">
-            <span class="history-item-type">${item.type} (${item.format})</span>
-            <span>${item.time}</span>
-          </div>
-          <div class="history-item-actions">
-            <button class="hist-action-btn" data-act="openFile" data-idx="${index}">Mở file</button>
-            <button class="hist-action-btn" data-act="openFolder" data-idx="${index}">Mở thư mục</button>
-            <button class="hist-action-btn" data-act="remove" data-idx="${index}">Xóa</button>
-          </div>
-        </div>
-      `;
-      historyList.appendChild(el);
+    pendingTasks.forEach(pending => {
+      const card = document.createElement('article');
+      card.className = 'task-card pending';
+      card.appendChild(makeTaskThumbnail(pending.opts.thumbnail, pending.opts.title));
+      appendTaskInfo(card, pending.opts, true);
+      card.appendChild(makeTaskButton('Bỏ hàng đợi', 'task-cancel-btn', () => {
+        const index = pendingTasks.findIndex(item => item.localId === pending.localId);
+        if (index >= 0) pendingTasks.splice(index, 1);
+        updateQueueBadges();
+        renderActiveQueue();
+        renderInlineQueueSummary();
+      }));
+      activeQueueList.appendChild(card);
     });
 
-    historyList.querySelectorAll('.hist-action-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const act = btn.dataset.act;
-        const idx = parseInt(btn.dataset.idx);
-        const list = getHistory();
-        const item = list[idx];
-        if (!item) return;
-
-        if (act === 'openFile') window.ytdlp.openFile(item.filePath);
-        else if (act === 'openFolder') window.ytdlp.openFolder(currentOutputDir);
-        else if (act === 'remove') {
-          list.splice(idx, 1);
-          saveHistory(list);
-          renderHistory();
+    runningTasks.forEach(task => {
+      const card = document.createElement('article');
+      card.className = 'task-card';
+      card.appendChild(makeTaskThumbnail(task.thumbnail, task.title));
+      appendTaskInfo(card, task);
+      card.appendChild(makeTaskButton('Hủy', 'task-cancel-btn', async () => {
+        try {
+          await window.ytdlp.cancelDownloadTask(task.id);
+        } catch (error) {
+          showToast(`Không thể hủy: ${error.message || error}`, 'error');
         }
-      });
+      }));
+      activeQueueList.appendChild(card);
     });
   }
 
-  btnHistoryToggle?.addEventListener('click', () => {
-    renderHistory();
-    historyDrawerOverlay?.classList.remove('hidden');
-  });
+  async function renderCompletedHistory() {
+    if (!managerHistoryList) return;
 
-  btnCloseHistory?.addEventListener('click', () => {
-    historyDrawerOverlay?.classList.add('hidden');
-  });
+    try {
+      const history = await window.ytdlp.getHistory();
+      managerHistoryList.replaceChildren();
+      if (!Array.isArray(history) || history.length === 0) {
+        const empty = document.createElement('p');
+        empty.className = 'history-empty';
+        empty.textContent = 'Chưa có lịch sử tải xuống nào';
+        managerHistoryList.appendChild(empty);
+        return;
+      }
 
-  btnClearHistory?.addEventListener('click', () => {
-    saveHistory([]);
-    renderHistory();
-    showToast('Đã xóa toàn bộ lịch sử!');
-  });
+      history.forEach((item) => {
+        const card = document.createElement('article');
+        card.className = 'task-card';
+        card.appendChild(makeTaskThumbnail(item.thumbnail, item.title));
 
-  updateHistoryBadge();
+        const info = document.createElement('div');
+        info.className = 'task-info-group';
+        const title = document.createElement('div');
+        title.className = 'task-title';
+        title.textContent = item.title || item.fileName || 'Tệp đã tải';
+        title.title = title.textContent;
+        const meta = document.createElement('div');
+        meta.className = 'task-meta-row';
+        const detail = document.createElement('span');
+        detail.textContent = `${item.channel || 'YouTube'}${item.format ? ` • ${String(item.format).toUpperCase()}` : ''} • ${item.date || ''}`;
+        const status = document.createElement('span');
+        status.className = 'task-status-success';
+        status.textContent = 'Hoàn tất';
+        meta.append(detail, status);
+        info.append(title, meta);
+        card.appendChild(info);
+
+        const actions = document.createElement('div');
+        actions.className = 'task-actions';
+        const filePathValue = item.filePath || '';
+        actions.append(
+          makeTaskButton('Mở file', 'task-action-btn', () => filePathValue && window.ytdlp.openFile(filePathValue)),
+          makeTaskButton('Mở thư mục', 'task-action-btn', () => window.ytdlp.openFolder(item.folderPath || filePathValue || currentOutputDir)),
+          makeTaskButton('Sao chép', 'task-action-btn', async () => {
+            if (!filePathValue) return;
+            try {
+              await navigator.clipboard.writeText(filePathValue);
+              showToast('Đã sao chép đường dẫn file!', 'success');
+            } catch {
+              showToast('Không thể sao chép đường dẫn file.', 'error');
+            }
+          }),
+          makeTaskButton('Xóa', 'task-action-btn', async () => {
+            try {
+              await window.ytdlp.removeHistoryItem(item.id);
+              await renderCompletedHistory();
+            } catch (error) {
+              showToast(`Không thể xóa mục lịch sử: ${error.message || error}`, 'error');
+            }
+          })
+        );
+        card.appendChild(actions);
+        managerHistoryList.appendChild(card);
+      });
+    } catch (error) {
+      managerHistoryList.replaceChildren();
+      const message = document.createElement('p');
+      message.className = 'history-empty';
+      message.textContent = `Không thể đọc lịch sử: ${error.message || error}`;
+      managerHistoryList.appendChild(message);
+    }
+  }
+
+  btnClearHistoryManager?.addEventListener('click', async () => {
+    try {
+      await window.ytdlp.clearHistory();
+      await renderCompletedHistory();
+      showToast('Đã xóa toàn bộ lịch sử!', 'success');
+    } catch (error) {
+      showToast(`Không thể xóa lịch sử: ${error.message || error}`, 'error');
+    }
+  });
 
   // ═══ State ═══
 
@@ -387,8 +507,24 @@ document.addEventListener('DOMContentLoaded', async () => {
   let currentTab = 'video';
   let currentOutputDir = '';
   let lastDownloadedFile = '';
-  let isDownloading = false;
+  let lastDownloadedFolder = '';
   let debounceTimer = null;
+  let infoRequestGeneration = 0;
+  let focusedTaskId = '';
+  let queuePumpRunning = false;
+  let pendingSequence = 0;
+  let queueHadCompletion = false;
+  let queueCompletionShown = false;
+  let autoOpenTimer = null;
+  const MAX_CONCURRENT_TASKS = 3;
+  const activeTasksMap = new Map();
+  const pendingTasks = [];
+  let currentSettings = {
+    language: 'vi',
+    theme: 'red',
+    downloadPath: '',
+    autoOpenFolder: false,
+  };
 
   // Chip state per tab
   const selections = {
@@ -396,7 +532,34 @@ document.addEventListener('DOMContentLoaded', async () => {
     audio: { quality: 'best', format: 'mp3' },
     subtitle: { lang: '', format: 'srt' },
     thumbnail: { quality: 'maxresdefault', format: 'jpg' },
+    metadata: { quality: '', format: 'txt' },
   };
+
+  async function persistSettings() {
+    currentSettings.downloadPath = currentOutputDir || currentSettings.downloadPath || '';
+    try {
+      await window.ytdlp.saveSettings({ ...currentSettings });
+    } catch (error) {
+      console.error('Không thể lưu cài đặt:', error);
+    }
+  }
+
+  async function loadPersistentSettings() {
+    try {
+      const saved = await window.ytdlp.getSettings();
+      if (saved && typeof saved === 'object') {
+        currentSettings = { ...currentSettings, ...saved };
+      }
+    } catch (error) {
+      console.error('Không thể đọc cài đặt:', error);
+    }
+
+    currentOutputDir = currentSettings.downloadPath || '';
+    applyTheme(currentSettings.theme || 'red');
+    applyLanguage(currentSettings.language || 'vi');
+    if (chkAutoOpenFolder) chkAutoOpenFolder.checked = Boolean(currentSettings.autoOpenFolder);
+    if (currentOutputDir) updateFolderDisplay();
+  }
 
   // ═══ Window Controls ═══
 
@@ -434,8 +597,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     }
 
-    // Load download path
-    currentOutputDir = await window.ytdlp.getDownloadPath();
+    // Use the persisted path when available, otherwise initialise the default.
+    if (!currentOutputDir) {
+      currentOutputDir = await window.ytdlp.getDownloadPath();
+      currentSettings.downloadPath = currentOutputDir;
+      await persistSettings();
+    }
     updateFolderDisplay();
     return true;
   }
@@ -507,6 +674,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     tempImg.onerror = () => {
       if (quality === 'maxresdefault' && !isFallbackAttempt) {
         if (thumbFallbackNotice) thumbFallbackNotice.classList.remove('hidden');
+        const hqChip = document.querySelector('#thumbQualityChips .chip[data-value="hqdefault"]');
+        document.querySelectorAll('#thumbQualityChips .chip').forEach(c => c.classList.remove('active'));
+        hqChip?.classList.add('active');
+        selections.thumbnail.quality = 'hqdefault';
         updateThumbnailPreview(true);
       }
     };
@@ -538,6 +709,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           updateThumbnailPreview();
         }
         else if (groupId === 'thumbFormatChips') selections.thumbnail.format = value;
+        else if (groupId === 'metadataFormatChips') selections.metadata.format = value;
       });
     });
   }
@@ -603,13 +775,80 @@ document.addEventListener('DOMContentLoaded', async () => {
     return rawUrl;
   }
 
+  function formatDuration(seconds) {
+    const value = Math.max(0, Number(seconds) || 0);
+    const hours = Math.floor(value / 3600);
+    const minutes = Math.floor((value % 3600) / 60);
+    const secs = Math.floor(value % 60);
+    return hours > 0
+      ? `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+      : `${minutes}:${String(secs).padStart(2, '0')}`;
+  }
+
+  function normalizeSubtitles(rawSubtitles) {
+    if (Array.isArray(rawSubtitles)) {
+      return rawSubtitles.map(sub => ({
+        code: String(sub.code || sub.lang || ''),
+        name: String(sub.name || sub.code || sub.lang || ''),
+        formats: Array.isArray(sub.formats) ? sub.formats : [],
+      })).filter(sub => sub.code);
+    }
+    if (!rawSubtitles || typeof rawSubtitles !== 'object') return [];
+    return Object.entries(rawSubtitles).map(([code, tracks]) => ({
+      code,
+      name: String(tracks?.[0]?.name || code),
+      formats: Array.isArray(tracks) ? tracks.map(track => track.ext).filter(Boolean) : [],
+    }));
+  }
+
+  function normalizeVideoInfo(raw, sourceUrl) {
+    if (!raw || typeof raw !== 'object') throw new Error('Dữ liệu video không hợp lệ');
+    const duration = Number(raw.duration) || 0;
+    return {
+      ...raw,
+      id: String(raw.id || ''),
+      sourceUrl: raw.webpage_url || raw.original_url || sourceUrl,
+      title: String(raw.title || raw.fulltitle || 'Video YouTube'),
+      channel: String(raw.channel || raw.uploader || 'YouTube'),
+      duration,
+      durationString: raw.durationString || raw.duration_string || formatDuration(duration),
+      viewCount: Number(raw.viewCount ?? raw.view_count) || 0,
+      thumbnail: String(raw.thumbnail || raw.thumbnails?.at?.(-1)?.url || ''),
+      formats: Array.isArray(raw.formats) ? raw.formats : [],
+      subtitles: normalizeSubtitles(raw.subtitles),
+    };
+  }
+
+  function normalizePlaylistEntry(item) {
+    const id = String(item?.id || '');
+    let entryUrl = String(item?.webpage_url || item?.url || '');
+    if (!/^https?:\/\//i.test(entryUrl)) {
+      const identifier = id || entryUrl;
+      entryUrl = identifier ? `https://www.youtube.com/watch?v=${encodeURIComponent(identifier)}` : '';
+    }
+    return {
+      ...item,
+      id,
+      url: entryUrl,
+      title: String(item?.title || 'Untitled'),
+      channel: String(item?.channel || item?.uploader || 'YouTube'),
+      thumbnail: String(
+        item?.thumbnail
+        || item?.thumbnails?.at?.(-1)?.url
+        || (id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : '')
+      ),
+    };
+  }
+
   // ═══ Fetch Video Info ═══
 
   async function fetchVideoInfo(url) {
     if (!url) return;
+    const requestGeneration = ++infoRequestGeneration;
 
     // Basic URL validation
     if (!url.match(/youtu\.?be/i) && !url.match(/^[a-zA-Z0-9_-]{11}$/)) {
+      urlLoading.classList.add('hidden');
       setHint('URL không hợp lệ. Hãy paste link YouTube.', 'error');
       return;
     }
@@ -628,10 +867,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     playlistData = null;
 
     try {
-      const isDedicatedPlaylist = url.includes('/playlist?') || (url.includes('list=PL') && !url.includes('watch?v='));
+      const isDedicatedPlaylist = url.includes('/playlist?') || (/[?&]list=/.test(url) && !url.includes('watch?v='));
 
       if (isDedicatedPlaylist) {
-        await checkAndLoadPlaylist(url);
+        await checkAndLoadPlaylist(url, requestGeneration);
+        if (requestGeneration !== infoRequestGeneration) return;
         if (playlistData && playlistData.entries.length > 0) {
           downloadPanel.classList.remove('hidden');
           btnDownload.disabled = false;
@@ -644,10 +884,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       // Single Video Download (Clean URL to avoid scanning mix playlists)
       const cleanUrl = cleanSingleVideoUrl(url);
-      videoInfo = await window.ytdlp.getInfo(cleanUrl);
+      const rawInfo = await window.ytdlp.getInfo(cleanUrl);
+      if (requestGeneration !== infoRequestGeneration) return;
+      videoInfo = normalizeVideoInfo(rawInfo, cleanUrl);
 
       // Render info card
       infoThumb.src = videoInfo.thumbnail;
+      infoThumb.onerror = () => {
+        infoThumb.onerror = null;
+        infoThumb.src = 'icon.png';
+      };
       infoTitle.textContent = videoInfo.title;
       infoChannelName.textContent = videoInfo.channel;
       infoViewCount.textContent = formatViews(videoInfo.viewCount) + ' lượt xem';
@@ -673,10 +919,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
     } catch (err) {
+      if (requestGeneration !== infoRequestGeneration) return;
       setHint('Lỗi: ' + (err.message || 'Không thể lấy thông tin'), 'error');
       showToast('Không thể lấy thông tin video', 'error');
     } finally {
-      urlLoading.classList.add('hidden');
+      if (requestGeneration === infoRequestGeneration) {
+        urlLoading.classList.add('hidden');
+      }
     }
   }
 
@@ -726,7 +975,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       const btn = document.createElement('button');
       btn.className = `sub-chip ${idx === 0 ? 'active' : ''}`;
       btn.dataset.value = sub.code;
-      btn.innerHTML = `${sub.code.toUpperCase()} <span class="auto-badge official">SUB</span>`;
+      btn.append(document.createTextNode(`${sub.code.toUpperCase()} `));
+      const badge = document.createElement('span');
+      badge.className = 'auto-badge official';
+      badge.textContent = 'SUB';
+      btn.appendChild(badge);
       btn.title = `${sub.name || sub.code} (Phụ đề chính thức)`;
 
       if (idx === 0) selections.subtitle.lang = sub.code;
@@ -827,17 +1080,29 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   let playlistData = null;
 
-  async function checkAndLoadPlaylist(url) {
+  async function checkAndLoadPlaylist(url, requestGeneration = infoRequestGeneration) {
     try {
       setHint('Đang tải danh sách Playlist...');
-      playlistData = await window.ytdlp.getPlaylistInfo(url);
-      if (playlistData && playlistData.entries.length > 0) {
+      const rawPlaylist = await window.ytdlp.getPlaylistInfo(url);
+      if (requestGeneration !== infoRequestGeneration) return false;
+      const rawEntries = Array.isArray(rawPlaylist) ? rawPlaylist : rawPlaylist?.entries;
+      const entries = Array.isArray(rawEntries)
+        ? rawEntries.map(normalizePlaylistEntry).filter(entry => entry.url)
+        : [];
+      playlistData = {
+        title: Array.isArray(rawPlaylist) ? 'YouTube Playlist' : (rawPlaylist?.title || 'YouTube Playlist'),
+        videoCount: entries.length,
+        entries,
+      };
+      if (entries.length > 0) {
         renderPlaylist(playlistData);
         return true;
       }
     } catch (e) {
+      if (requestGeneration !== infoRequestGeneration) return false;
       console.log('Playlist check error:', e);
     }
+    if (requestGeneration !== infoRequestGeneration) return false;
     if (playlistCard) playlistCard.classList.add('hidden');
     playlistData = null;
     return false;
@@ -852,28 +1117,41 @@ document.addEventListener('DOMContentLoaded', async () => {
     info.entries.forEach((item, i) => {
       const row = document.createElement('div');
       row.className = 'playlist-item';
-      row.innerHTML = `
-        <label class="custom-checkbox">
-          <input type="checkbox" class="chk-playlist-item" data-url="${item.url}" data-title="${item.title}" checked>
-          <span class="checkmark"></span>
-        </label>
-        <span class="playlist-item-title">${i + 1}. ${item.title}</span>
-      `;
+      const label = document.createElement('label');
+      label.className = 'custom-checkbox';
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.className = 'chk-playlist-item';
+      checkbox.dataset.url = item.url;
+      checkbox.dataset.title = item.title;
+      checkbox.dataset.channel = item.channel;
+      checkbox.dataset.thumbnail = item.thumbnail;
+      checkbox.dataset.id = item.id;
+      checkbox.checked = true;
+      const checkmark = document.createElement('span');
+      checkmark.className = 'checkmark';
+      label.append(checkbox, checkmark);
+      const title = document.createElement('span');
+      title.className = 'playlist-item-title';
+      title.textContent = `${i + 1}. ${item.title}`;
+      row.append(label, title);
       playlistItemsList.appendChild(row);
     });
 
     playlistCard.classList.remove('hidden');
-
-    chkSelectAllPlaylist?.addEventListener('change', () => {
+    if (chkSelectAllPlaylist) chkSelectAllPlaylist.checked = true;
+    chkSelectAllPlaylist.onchange = () => {
       playlistItemsList.querySelectorAll('.chk-playlist-item').forEach(chk => {
         chk.checked = chkSelectAllPlaylist.checked;
       });
-    });
+    };
   }
 
   function resetVideoState() {
+    infoRequestGeneration += 1;
     videoInfo = null;
     playlistData = null;
+    urlLoading.classList.add('hidden');
     infoCard.classList.add('hidden');
     if (playlistCard) playlistCard.classList.add('hidden');
     downloadPanel.classList.add('hidden');
@@ -890,277 +1168,333 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (selected) {
       currentOutputDir = selected;
       updateFolderDisplay();
+      await persistSettings();
     }
+  });
+
+  chkAutoOpenFolder?.addEventListener('change', async () => {
+    currentSettings.autoOpenFolder = chkAutoOpenFolder.checked;
+    await persistSettings();
   });
 
   // ═══ Download Action ═══
 
-  btnDownload.addEventListener('click', async () => {
-    if ((!videoInfo && !playlistData) || isDownloading) return;
 
-    isDownloading = true;
-    btnDownload.classList.add('hidden');
-    btnCancel.classList.remove('hidden');
-    progressSection.classList.remove('hidden');
-    doneSection.classList.add('hidden');
+  // ═══ Non-blocking Concurrent Task Queue ═══
 
-    progressBar.style.width = '0%';
-    progressPercent.textContent = '0%';
-    progressLabel.textContent = 'Đang chuẩn bị...';
-    progressSpeed.textContent = '--';
-    progressSize.textContent = '--';
-    progressETA.textContent = '--';
+  function getDownloadSources() {
+    const checkedItems = playlistItemsList
+      ? Array.from(playlistItemsList.querySelectorAll('.chk-playlist-item:checked'))
+      : [];
 
-    const sel = selections[currentTab];
-
-    // Check if downloading Playlist batch
-    const checkedPlaylistItems = playlistItemsList ? Array.from(playlistItemsList.querySelectorAll('.chk-playlist-item:checked')) : [];
-
-    if (currentTab === 'bundle') {
-      // ⚡ Bundle Download (Quick All-in-One)
-      const url = urlInput.value.trim();
-      const chkVideo = document.getElementById('bundleChkVideo')?.checked;
-      const chkAudio = document.getElementById('bundleChkAudio')?.checked;
-      const chkSubtitle = document.getElementById('bundleChkSubtitle')?.checked;
-      const chkThumbnail = document.getElementById('bundleChkThumbnail')?.checked;
-
-      const selVidQual = document.getElementById('bundleSelVideoQuality')?.value || 'best';
-      const selAudQual = document.getElementById('bundleSelAudioQuality')?.value || '0';
-
-      const tasks = [];
-      if (chkVideo) tasks.push({ type: 'video', quality: selVidQual, format: 'mp4', name: 'Video (MP4)' });
-      if (chkAudio) tasks.push({ type: 'audio', quality: selAudQual, format: 'mp3', name: 'Audio (MP3)' });
-      if (chkSubtitle) tasks.push({ type: 'subtitle', lang: selections.subtitle.lang || 'vi', format: 'srt', name: 'Phụ đề (SRT)' });
-      if (chkThumbnail) tasks.push({ type: 'thumbnail', quality: 'maxresdefault', format: 'jpg', name: 'Thumbnail (JPG)' });
-
-      if (tasks.length === 0) {
-        showToast('Vui lòng tích chọn ít nhất 1 thành phần để tải!', 'error');
-        isDownloading = false;
-        btnCancel.classList.add('hidden');
-        btnDownload.classList.remove('hidden');
-        progressSection.classList.add('hidden');
-        return;
-      }
-
-      initSubtasks(tasks);
-
-      let successCount = 0;
-      for (let i = 0; i < tasks.length; i++) {
-        if (!isDownloading) break;
-        const task = tasks[i];
-        updateSubtaskStatus(i, 'Đang tải...');
-        progressLabel.textContent = `[${i + 1}/${tasks.length}] Đang tải ${task.name}...`;
-
-        const options = {
-          url,
-          type: task.type,
-          format: task.format,
-          quality: task.quality,
-          subtitleLang: task.lang || 'vi',
-          subtitleFormat: task.format || 'srt',
-          outputDir: currentOutputDir,
-        };
-
-        if (task.type === 'thumbnail' && videoInfo) {
-          options.thumbnailUrl = `https://img.youtube.com/vi/${videoInfo.id}/maxresdefault.jpg`;
-          options.title = videoInfo.title;
-        }
-
-        try {
-          const result = await window.ytdlp.download(options);
-          if (result && result.success) {
-            successCount++;
-            lastDownloadedFile = result.file || lastDownloadedFile;
-            if (videoInfo) {
-              addHistoryItem({
-                title: `${videoInfo.title} (${task.name})`,
-                type: task.type,
-                format: task.format,
-                quality: task.quality,
-                filePath: result.file || '',
-                thumbnail: videoInfo.thumbnail,
-              });
-            }
-          }
-        } catch (e) {
-          console.log('Bundle task error:', e);
-        }
-      }
-
-      finishSubtasks();
-      isDownloading = false;
-      btnCancel.classList.add('hidden');
-      btnDownload.classList.remove('hidden');
-      progressSection.classList.add('hidden');
-
-      if (successCount > 0) {
-        doneSection.classList.remove('hidden');
-        if (doneFileName) {
-          doneFileName.textContent = `Đã tải thành công ${successCount}/${tasks.length} thành phần đã chọn!`;
-        }
-        showToast(`Tải thành công ${successCount} thành phần!`, 'success');
-        if (chkAutoOpenFolder && chkAutoOpenFolder.checked) {
-          window.ytdlp.openFolder(currentOutputDir);
-        }
-      }
-      return;
-    } else if (playlistData && checkedPlaylistItems.length > 0) {
-      const total = checkedPlaylistItems.length;
-      for (let i = 0; i < total; i++) {
-        if (!isDownloading) break; // Cancelled
-        const chk = checkedPlaylistItems[i];
-        const itemUrl = chk.dataset.url;
-        const itemTitle = chk.dataset.title;
-
-        progressLabel.textContent = `[${i + 1}/${total}] Đang tải: ${itemTitle}`;
-        const options = {
-          url: itemUrl,
-          type: currentTab,
-          format: sel.format,
-          quality: sel.quality,
-          subtitleLang: sel.lang,
-          subtitleFormat: sel.format,
-          outputDir: currentOutputDir,
-        };
-
-        try {
-          const res = await window.ytdlp.download(options);
-          if (res.success && res.file) {
-            lastDownloadedFile = res.file;
-            addHistoryItem({
-              title: itemTitle,
-              type: currentTab,
-              format: sel.format,
-              quality: sel.quality,
-              filePath: res.file,
-              thumbnail: videoInfo?.thumbnail || '',
-            });
-          }
-        } catch (e) {
-          console.log('Batch item error:', e);
-        }
-      }
-    } else {
-      // Single Download
-      initSubtasks([
-        { name: '1. Khởi tạo luồng & kiểm tra định dạng' },
-        { name: '2. Tải dữ liệu luồng media' },
-        { name: '3. Ghép nối & hoàn thiện file' },
-      ]);
-      const url = urlInput.value.trim();
-      const options = {
-        url,
-        type: currentTab,
-        format: sel.format,
-        quality: sel.quality,
-        subtitleLang: sel.lang,
-        subtitleFormat: sel.format,
-        outputDir: currentOutputDir,
-      };
-
-      if (currentTab === 'thumbnail' && videoInfo) {
-        const q = sel.quality || 'maxresdefault';
-        options.thumbnailUrl = `https://img.youtube.com/vi/${videoInfo.id}/${q}.jpg`;
-        options.title = videoInfo.title;
-      }
-
-      try {
-        const result = await window.ytdlp.download(options);
-        if (result.success) {
-          lastDownloadedFile = result.file || '';
-          if (videoInfo) {
-            addHistoryItem({
-              title: videoInfo.title,
-              type: currentTab,
-              format: sel.format,
-              quality: sel.quality,
-              filePath: lastDownloadedFile,
-              thumbnail: videoInfo.thumbnail,
-            });
-          }
-        }
-      } catch (err) {
-        showToast('Lỗi tải: ' + (err.message || 'Unknown'), 'error');
-      }
+    if (playlistData) {
+      return checkedItems.map(checkbox => ({
+        url: checkbox.dataset.url,
+        title: checkbox.dataset.title || 'Video YouTube',
+        channel: checkbox.dataset.channel || 'YouTube',
+        thumbnail: checkbox.dataset.thumbnail || '',
+        id: checkbox.dataset.id || '',
+      }));
     }
 
-    isDownloading = false;
+    if (!videoInfo) return [];
+    return [{
+      url: videoInfo.sourceUrl || cleanSingleVideoUrl(urlInput.value.trim()),
+      title: videoInfo.title,
+      channel: videoInfo.channel,
+      thumbnail: videoInfo.thumbnail,
+      id: videoInfo.id,
+    }];
+  }
+
+  function getDownloadComponents() {
+    if (currentTab !== 'bundle') {
+      const selected = selections[currentTab] || {};
+      return [{
+        type: currentTab,
+        quality: selected.quality || '',
+        format: selected.format || (currentTab === 'metadata' ? 'txt' : ''),
+        subLang: selections.subtitle.lang || 'vi',
+        thumbRes: selections.thumbnail.quality || 'maxresdefault',
+        label: currentTab,
+      }];
+    }
+
+    const components = [];
+    if (document.getElementById('bundleChkVideo')?.checked) {
+      components.push({
+        type: 'video',
+        quality: document.getElementById('bundleSelVideoQuality')?.value || 'best',
+        format: 'mp4',
+        label: 'Video (MP4)',
+      });
+    }
+    if (document.getElementById('bundleChkAudio')?.checked) {
+      components.push({
+        type: 'audio',
+        quality: document.getElementById('bundleSelAudioQuality')?.value || '0',
+        format: 'mp3',
+        label: 'Audio (MP3)',
+      });
+    }
+    if (document.getElementById('bundleChkSubtitle')?.checked) {
+      components.push({
+        type: 'subtitle',
+        quality: '',
+        format: 'srt',
+        subLang: selections.subtitle.lang || 'vi',
+        label: 'Phụ đề (SRT)',
+      });
+    }
+    if (document.getElementById('bundleChkThumbnail')?.checked) {
+      components.push({
+        type: 'thumbnail',
+        quality: 'maxresdefault',
+        format: 'jpg',
+        thumbRes: 'maxresdefault',
+        label: 'Thumbnail (JPG)',
+      });
+    }
+    if (document.getElementById('bundleChkMetadata')?.checked) {
+      components.push({
+        type: 'metadata',
+        quality: '',
+        format: 'txt',
+        label: 'Metadata (TXT)',
+      });
+    }
+    return components;
+  }
+
+  function buildTaskDescriptors() {
+    const sources = getDownloadSources();
+    const components = getDownloadComponents();
+    const descriptors = [];
+
+    sources.forEach(source => {
+      components.forEach(component => {
+        const thumbnailUrl = component.type === 'thumbnail' && source.id
+          ? `https://img.youtube.com/vi/${source.id}/${component.thumbRes || 'maxresdefault'}.jpg`
+          : source.thumbnail;
+        descriptors.push({
+          name: `${source.title} • ${component.label}`,
+          opts: {
+            url: source.url,
+            type: component.type,
+            quality: component.quality,
+            format: component.format,
+            subLang: component.subLang || selections.subtitle.lang || 'vi',
+            subtitleLang: component.subLang || selections.subtitle.lang || 'vi',
+            subtitleFormat: component.type === 'subtitle' ? component.format : selections.subtitle.format,
+            thumbRes: component.thumbRes || selections.thumbnail.quality,
+            outputPath: currentOutputDir,
+            outputDir: currentOutputDir,
+            title: source.title,
+            thumbnail: source.thumbnail,
+            thumbnailUrl,
+            channel: source.channel,
+          },
+        });
+      });
+    });
+    return descriptors;
+  }
+
+  function syncInlineSubtasks() {
+    currentSubtasks = [
+      ...Array.from(activeTasksMap.values()).map(task => ({
+        name: `${task.title || 'Video YouTube'} • ${String(task.type || '').toUpperCase()}`,
+        status: 'active',
+        statusText: `${Math.max(0, Number(task.percent) || 0).toFixed(1)}%`,
+      })),
+      ...pendingTasks.map(item => ({
+        name: item.name,
+        status: 'pending',
+        statusText: 'Chờ...',
+      })),
+    ];
+    renderSubtasks();
+    if (subtaskCountBadge) {
+      subtaskCountBadge.textContent = `${activeTasksMap.size}/${currentSubtasks.length}`;
+    }
+  }
+
+  function renderInlineTask(task) {
+    if (!task) {
+      if (pendingTasks.length === 0 && activeTasksMap.size === 0) {
+        progressSection.classList.add('hidden');
+        btnCancel.classList.add('hidden');
+      }
+      return;
+    }
+
+    const percent = Math.max(0, Math.min(Number(task.percent) || 0, 100));
+    progressSection.classList.remove('hidden');
+    btnCancel.classList.remove('hidden');
+    progressLabel.textContent = `${task.title || 'Video YouTube'} • ${String(task.type || '').toUpperCase()}`;
+    progressPercent.textContent = `${percent.toFixed(1)}%`;
+    progressBar.style.width = `${percent}%`;
+    progressSpeed.textContent = task.speed || '--';
+    progressSize.textContent = `${activeTasksMap.size} đang tải • ${pendingTasks.length} đang chờ`;
+    progressETA.textContent = task.eta || 'ETA: --';
+  }
+
+  function renderInlineQueueSummary() {
+    const focused = activeTasksMap.get(focusedTaskId)
+      || activeTasksMap.values().next().value;
+    if (focused) {
+      focusedTaskId = focused.id;
+      renderInlineTask(focused);
+    } else if (pendingTasks.length > 0) {
+      progressSection.classList.remove('hidden');
+      btnCancel.classList.add('hidden');
+      progressLabel.textContent = 'Đang chờ khởi tạo tác vụ...';
+      progressPercent.textContent = '0%';
+      progressBar.style.width = '0%';
+      progressSpeed.textContent = '--';
+      progressSize.textContent = `${pendingTasks.length} đang chờ`;
+      progressETA.textContent = 'ETA: --';
+    } else {
+      progressSection.classList.add('hidden');
+      btnCancel.classList.add('hidden');
+    }
+    syncInlineSubtasks();
+  }
+
+  async function pumpTaskQueue() {
+    if (queuePumpRunning) return;
+    queuePumpRunning = true;
+    try {
+      while (pendingTasks.length > 0 && activeTasksMap.size < MAX_CONCURRENT_TASKS) {
+        const pending = pendingTasks.shift();
+        try {
+          const task = await window.ytdlp.startDownloadTask(pending.opts);
+          if (!task?.id) throw new Error('Backend không trả về mã tác vụ');
+          activeTasksMap.set(task.id, task);
+          if (!focusedTaskId) focusedTaskId = task.id;
+        } catch (error) {
+          showToast(`Không thể khởi tạo "${pending.opts.title}": ${error.message || error}`, 'error');
+        }
+        updateQueueBadges();
+        renderActiveQueue();
+        renderInlineQueueSummary();
+      }
+    } finally {
+      queuePumpRunning = false;
+    }
+  }
+
+  function showQueueCompletion() {
+    if (queueCompletionShown || !queueHadCompletion || !lastDownloadedFile) return;
+    queueCompletionShown = true;
+    progressSection.classList.add('hidden');
     btnCancel.classList.add('hidden');
-    btnDownload.classList.remove('hidden');
+    doneSection.classList.remove('hidden');
+    doneFileName.textContent = lastDownloadedFile.split(/[/\\]/).pop() || 'Tải xuống thành công';
+    showToast('Tải xuống hoàn tất!', 'success');
+
+    if (currentSettings.autoOpenFolder) {
+      clearTimeout(autoOpenTimer);
+      autoOpenTimer = setTimeout(() => {
+        window.ytdlp.openFolder(lastDownloadedFolder || lastDownloadedFile || currentOutputDir);
+      }, 350);
+    }
+  }
+
+  btnDownload.addEventListener('click', async () => {
+    if (!videoInfo && !playlistData) return;
+    const descriptors = buildTaskDescriptors();
+    if (playlistData && getDownloadSources().length === 0) {
+      showToast('Vui lòng chọn ít nhất một video trong playlist.', 'error');
+      return;
+    }
+    if (descriptors.length === 0) {
+      showToast('Vui lòng chọn ít nhất một thành phần để tải.', 'error');
+      return;
+    }
+
+    if (activeTasksMap.size === 0 && pendingTasks.length === 0) {
+      clearTimeout(autoOpenTimer);
+      queueHadCompletion = false;
+      queueCompletionShown = false;
+      lastDownloadedFile = '';
+      lastDownloadedFolder = '';
+    }
+    doneSection.classList.add('hidden');
+    descriptors.forEach(descriptor => {
+      pendingTasks.push({
+        ...descriptor,
+        localId: `pending_${Date.now()}_${pendingSequence++}`,
+      });
+    });
+    updateQueueBadges();
+    renderActiveQueue();
+    renderInlineQueueSummary();
+    const message = descriptors.length === 1
+      ? `Đã thêm "${descriptors[0].opts.title}" vào hàng đợi tải!`
+      : `Đã thêm ${descriptors.length} tác vụ vào hàng đợi tải!`;
+    showToast(message, 'success');
+    await pumpTaskQueue();
   });
 
   btnCancel.addEventListener('click', async () => {
-    await window.ytdlp.cancel();
-    isDownloading = false;
-    btnCancel.classList.add('hidden');
-    btnDownload.classList.remove('hidden');
-    progressSection.classList.add('hidden');
-    showToast('Đã hủy tải.', 'info');
-  });
-
-  // ═══ Progress Listener ═══
-
-  window.ytdlp.onProgress((data) => {
-    switch (data.status) {
-      case 'downloading':
-        if (currentTab !== 'bundle') {
-          updateSubtaskStatus(1, `${data.percent.toFixed(1)}%`);
-        }
-        if (!progressLabel.textContent.startsWith('[')) {
-          progressLabel.textContent = 'Đang tải...';
-        }
-        progressPercent.textContent = data.percent.toFixed(1) + '%';
-        progressBar.style.width = data.percent + '%';
-        progressSpeed.textContent = data.speed || '--';
-        progressETA.textContent = data.eta ? 'ETA: ' + data.eta : '--';
-        progressSize.textContent = data.downloaded && data.totalSize
-          ? `${data.downloaded} / ${data.totalSize}` : '--';
-        break;
-
-      case 'processing':
-        if (currentTab !== 'bundle') {
-          updateSubtaskStatus(2, 'Đang ghép file...');
-        }
-        progressLabel.textContent = data.message || 'Đang xử lý...';
-        progressPercent.textContent = '100%';
-        progressBar.style.width = '100%';
-        break;
-
-      case 'done':
-        finishSubtasks();
-        progressPercent.textContent = '100%';
-        progressBar.style.width = '100%';
-        if (currentTab === 'bundle' && isDownloading) {
-          // Bỏ qua chuyển UI done giữa chừng khi đang tải vòng lặp bundle
-          break;
-        }
-        progressSection.classList.add('hidden');
-        doneSection.classList.remove('hidden');
-        lastDownloadedFile = data.file || '';
-        currentOutputDir = data.outputDir || currentOutputDir;
-
-        if (doneFileName) {
-          const fileName = lastDownloadedFile.split(/[/\\]/).pop() || 'Tải xuống thành công';
-          doneFileName.textContent = fileName;
-        }
-
-        showToast('Tải thành công!', 'success');
-
-        if (chkAutoOpenFolder && chkAutoOpenFolder.checked) {
-          window.ytdlp.openFolder(currentOutputDir);
-        }
-        break;
-
-      case 'error':
-        progressSection.classList.add('hidden');
-        showToast('Lỗi: ' + (data.message || 'Unknown'), 'error');
-        break;
-
-      case 'cancelled':
-        progressSection.classList.add('hidden');
-        break;
+    if (!focusedTaskId) return;
+    try {
+      await window.ytdlp.cancelDownloadTask(focusedTaskId);
+    } catch (error) {
+      showToast(`Không thể hủy: ${error.message || error}`, 'error');
     }
   });
+
+  window.ytdlp.onTaskUpdated(async task => {
+    if (!task?.id) return;
+    const terminal = ['completed', 'error', 'cancelled'].includes(task.status);
+
+    if (terminal) {
+      activeTasksMap.delete(task.id);
+      if (task.status === 'completed') {
+        queueHadCompletion = true;
+        lastDownloadedFile = task.filePath || lastDownloadedFile;
+        lastDownloadedFolder = task.folderPath || lastDownloadedFolder;
+      } else if (task.status === 'error') {
+        showToast(`Lỗi tải "${task.title || 'video'}": ${task.error || 'Không xác định'}`, 'error');
+      } else {
+        showToast(`Đã hủy "${task.title || 'tác vụ'}".`, 'info');
+      }
+      if (focusedTaskId === task.id) focusedTaskId = '';
+    } else {
+      activeTasksMap.set(task.id, task);
+      if (!focusedTaskId) focusedTaskId = task.id;
+    }
+
+    updateQueueBadges();
+    renderActiveQueue();
+    renderInlineQueueSummary();
+    if (task.status === 'completed') renderCompletedHistory();
+    if (terminal) {
+      await pumpTaskQueue();
+      if (activeTasksMap.size === 0 && pendingTasks.length === 0) {
+        showQueueCompletion();
+      }
+    }
+  });
+
+  async function loadInitialTasks() {
+    try {
+      const tasks = await window.ytdlp.getActiveTasks();
+      activeTasksMap.clear();
+      if (Array.isArray(tasks)) {
+        tasks.filter(task => task?.id && task.status === 'running')
+          .forEach(task => activeTasksMap.set(task.id, task));
+      }
+      focusedTaskId = activeTasksMap.keys().next().value || '';
+    } catch (error) {
+      console.error('Không thể đọc tác vụ đang chạy:', error);
+    }
+    updateQueueBadges();
+    renderActiveQueue();
+    renderInlineQueueSummary();
+  }
 
   // ═══ Done Actions ═══
 
@@ -1179,7 +1513,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   btnOpenFolder.addEventListener('click', () => {
-    window.ytdlp.openFolder(currentOutputDir);
+    window.ytdlp.openFolder(lastDownloadedFolder || lastDownloadedFile || currentOutputDir);
   });
 
   if (btnCopyPath) {
@@ -1206,8 +1540,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   // ═══ Init ═══
 
   initChipGroups();
+  await loadPersistentSettings();
   const setupOk = await checkAndSetup();
   if (setupOk) {
+    await loadInitialTasks();
+    await renderCompletedHistory();
     urlInput.focus();
   }
 });

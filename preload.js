@@ -1,59 +1,56 @@
 /**
- * preload.js — Secure bridge between renderer and main process
+ * Narrow, serializable IPC bridge exposed to the renderer.
  */
+
+'use strict';
 
 const { contextBridge, ipcRenderer } = require('electron');
 
-contextBridge.exposeInMainWorld('ytdlp', {
-  // Get video metadata
-  getInfo: (url) => ipcRenderer.invoke('get-video-info', url),
+function subscribe(channel, callback, transform = (value) => value) {
+  if (typeof callback !== 'function') {
+    return () => {};
+  }
 
-  // Get playlist info
+  const listener = (_event, value) => {
+    callback(transform(value));
+  };
+  ipcRenderer.on(channel, listener);
+  return () => ipcRenderer.removeListener(channel, listener);
+}
+
+const bridge = {
+  getVideoInfo: (url) => ipcRenderer.invoke('get-video-info', url),
+  getInfo: (url) => ipcRenderer.invoke('get-video-info', url),
   getPlaylistInfo: (url) => ipcRenderer.invoke('get-playlist-info', url),
 
-  // Save metadata JSON
-  saveMetadataJson: (options) => ipcRenderer.invoke('save-metadata-json', options),
+  startDownloadTask: (options) => ipcRenderer.invoke('start-download-task', options),
+  download: (options) => ipcRenderer.invoke('start-download-task', options),
+  cancelDownloadTask: (taskId) => ipcRenderer.invoke('cancel-download-task', taskId),
+  cancel: (taskId) => ipcRenderer.invoke('cancel-download', taskId),
+  getActiveTasks: () => ipcRenderer.invoke('get-active-tasks'),
 
-  // Start download
-  download: (options) => ipcRenderer.invoke('start-download', options),
+  getHistory: () => ipcRenderer.invoke('get-history'),
+  saveHistory: (items) => ipcRenderer.invoke('save-history', items),
+  removeHistoryItem: (itemId) => ipcRenderer.invoke('remove-history-item', itemId),
+  clearHistory: () => ipcRenderer.invoke('clear-history'),
+  getSettings: () => ipcRenderer.invoke('get-settings'),
+  saveSettings: (settings) => ipcRenderer.invoke('save-settings', settings),
 
-  // Cancel active download
-  cancel: () => ipcRenderer.invoke('cancel-download'),
-
-  // Select output folder
   selectFolder: () => ipcRenderer.invoke('select-folder'),
-
-  // Open folder in file explorer
   openFolder: (folderPath) => ipcRenderer.invoke('open-folder', folderPath),
-
-  // Open file in default app
   openFile: (filePath) => ipcRenderer.invoke('open-file', filePath),
 
-  // Check if binaries are ready
   checkBinaries: () => ipcRenderer.invoke('check-binaries'),
-
-  // Setup binaries (download if missing)
   setupBinaries: () => ipcRenderer.invoke('setup-binaries'),
-
-  // Get default download path
   getDownloadPath: () => ipcRenderer.invoke('get-download-path'),
 
-  // Listen for progress updates
-  onProgress: (callback) => {
-    const handler = (_event, data) => callback(data);
-    ipcRenderer.on('download-progress', handler);
-    return () => ipcRenderer.removeListener('download-progress', handler);
-  },
+  onTaskUpdated: (callback) => subscribe('task-updated', callback),
+  onProgress: (callback) => subscribe('download-progress', callback),
+  onSetupStatus: (callback) => subscribe('setup-status', callback),
 
-  // Listen for setup status updates
-  onSetupStatus: (callback) => {
-    const handler = (_event, data) => callback(data);
-    ipcRenderer.on('setup-status', handler);
-    return () => ipcRenderer.removeListener('setup-status', handler);
-  },
-
-  // Window controls
   windowMinimize: () => ipcRenderer.invoke('window-minimize'),
   windowMaximize: () => ipcRenderer.invoke('window-maximize'),
   windowClose: () => ipcRenderer.invoke('window-close'),
-});
+};
+
+contextBridge.exposeInMainWorld('ytdlp', Object.freeze(bridge));

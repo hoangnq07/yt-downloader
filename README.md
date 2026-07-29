@@ -1,51 +1,55 @@
-# 🎬 YT Downloader Pro
+# YT Downloader Pro — Electron
 
-Ứng dụng desktop tải video, audio, phụ đề và thumbnail YouTube nhanh chóng với giao diện hiện đại, sử dụng **yt-dlp** làm engine.
+Phiên bản Electron của YT Downloader Pro, được duy trì độc lập với phiên bản
+Wails trên nhánh `main`.
 
----
+## Tính năng
 
-## ⚡ Yêu cầu
+- Tải video, audio, phụ đề, thumbnail và metadata TXT.
+- Nhiều tác vụ tải chạy đồng thời với hàng đợi giới hạn.
+- Theo dõi tiến độ và hủy riêng từng tác vụ.
+- Tải các thành phần bundle hoặc các video được chọn trong playlist.
+- Quản lý lịch sử tải xuống và cài đặt ứng dụng.
+- Tự tải `yt-dlp` và `ffmpeg` khi chạy lần đầu.
+- Hỗ trợ nhiều theme và tiếng Việt/English.
 
-- **Node.js** v18+ (đã cài sẵn)
-- **Kết nối Internet** (lần đầu để tải yt-dlp & ffmpeg tự động)
+## Yêu cầu phát triển
 
-## 🚀 Cài đặt & Khởi chạy
+- Node.js 18 trở lên.
+- Kết nối Internet trong lần thiết lập công cụ đầu tiên.
 
-```bash
-cd d:\Code\scripts\yt-downloader-pro
+## Cài dependencies và chạy
 
-# Cài đặt dependencies (chỉ cần 1 lần)
+```powershell
 npm install
-
-# Chạy ứng dụng
 npm start
 ```
 
-> **Lưu ý**: Lần đầu khởi chạy, app sẽ tự động tải `yt-dlp.exe` (~13MB) và `ffmpeg.exe` (~100MB) vào thư mục `bin/`. Chỉ cần thực hiện 1 lần duy nhất.
+Chạy kèm DevTools:
 
-## 📖 Hướng dẫn sử dụng
-
-1. **Paste link YouTube** vào ô nhập hoặc bấm nút Paste.
-2. App tự động hiển thị thông tin video (title, thumbnail, channel, views).
-3. **Chọn tab** muốn tải:
-   - 🎬 **Video** → chọn chất lượng (4K/1080p/720p...) và format (MP4/MKV/WEBM)
-   - 🎵 **Audio** → chọn bitrate (320/192/128kbps) và format (MP3/M4A/OPUS/FLAC)
-   - 📝 **Phụ đề** → chọn ngôn ngữ và format (SRT/VTT/ASS)
-   - 🖼️ **Thumbnail** → chọn format (JPG/PNG/WEBP)
-4. **Chọn thư mục lưu** (mặc định: `~/Downloads/YT-Downloader`)
-5. Bấm **Tải xuống** → xem progress realtime → hoàn tất!
-
-## 📂 Cấu trúc project
-
+```powershell
+npm run dev
 ```
-yt-downloader-pro/
-├── main.js         # Electron main process
-├── preload.js      # IPC bridge
-├── setup.js        # Auto-download yt-dlp & ffmpeg
-├── package.json
-├── bin/            # (auto-created) yt-dlp.exe, ffmpeg.exe
-└── renderer/
-    ├── index.html  # UI layout
-    ├── styles.css  # Dark glassmorphism theme
-    └── app.js      # Frontend logic
+
+Ở chế độ development, các công cụ media được lưu trong `bin/`. Bản ứng dụng
+đã đóng gói lưu chúng trong thư mục dữ liệu người dùng có quyền ghi.
+
+## Build installer
+
+```powershell
+npm run dist
 ```
+
+Electron Builder tạo artefact Windows trong `dist/`.
+
+## Cấu trúc chính
+
+```text
+main.js             Electron main process và task manager
+preload.js          IPC bridge an toàn cho renderer
+setup.js            Thiết lập yt-dlp/ffmpeg
+renderer/           HTML, CSS, JavaScript giao diện
+package.json        Scripts và cấu hình Electron Builder
+```
+
+Phiên bản Wails production nằm trên nhánh `main`.

@@ -90,27 +90,6 @@
     </div>
   </div>
 
-  <!-- History Drawer -->
-  <div class="history-drawer-overlay hidden" id="historyDrawerOverlay">
-    <div class="history-drawer" id="historyDrawer">
-      <div class="drawer-header">
-        <div class="drawer-title">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg>
-          <span>Lịch sử tải xuống</span>
-        </div>
-        <div class="drawer-actions-header">
-          <button class="drawer-btn-danger" id="btnClearHistory" title="Xóa toàn bộ lịch sử">Xóa tất cả</button>
-          <button class="drawer-close-btn" id="btnCloseHistory">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
-        </div>
-      </div>
-      <div class="drawer-body" id="historyList">
-        <p class="history-empty">Chưa có lịch sử tải xuống nào</p>
-      </div>
-    </div>
-  </div>
-
   <!-- ═══ Setup Overlay ═══ -->
   <div class="setup-overlay hidden" id="setupOverlay">
     <div class="setup-card">
@@ -132,20 +111,26 @@
   <!-- ═══ Main App ═══ -->
   <main class="app" id="mainApp">
 
-    <!-- ── Header Actions Bar (Settings & History) ── -->
-    <div class="top-bar-actions">
-      <button class="header-action-btn" id="btnSettingsToggle" title="Cài đặt">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    <!-- ── Main Navigation ── -->
+    <div class="main-nav-bar" role="navigation" aria-label="Điều hướng chính">
+      <div class="nav-tabs-group" role="tablist" aria-label="Khu vực ứng dụng">
+        <button class="nav-tab active" id="navBtnDownloader" type="button" role="tab" aria-selected="true" aria-controls="viewDownloader">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>Tải xuống</span>
+        </button>
+        <button class="nav-tab" id="navBtnManager" type="button" role="tab" aria-selected="false" aria-controls="viewManager">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><polygon points="12 11 12 17 17 14"/></svg>
+          <span>Quản lý &amp; lịch sử</span>
+          <span class="nav-queue-badge hidden" id="navQueueBadge" aria-label="Số tác vụ đang chờ">0</span>
+        </button>
+      </div>
+      <button class="header-action-btn" id="btnSettingsToggle" type="button" title="Cài đặt">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         <span>Cài đặt</span>
-      </button>
-
-      <button class="header-action-btn primary-action" id="btnHistoryToggle">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg>
-        <span>Lịch sử tải xuống</span>
-        <span id="historyBadge" class="header-history-badge hidden">0</span>
       </button>
     </div>
 
+    <div class="view-panel active" id="viewDownloader" role="tabpanel" aria-labelledby="navBtnDownloader">
     <!-- ── URL Input Section ── -->
     <section class="url-section">
       <div class="url-input-wrapper">
@@ -237,6 +222,10 @@
         <button class="tab" data-tab="thumbnail" id="tabThumbnail">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
           <span>Thumbnail</span>
+        </button>
+        <button class="tab" data-tab="metadata" id="tabMetadata">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          <span>Metadata</span>
         </button>
         <button class="tab" data-tab="bundle" id="tabBundle">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
@@ -352,6 +341,20 @@
           </div>
         </div>
       </div>
+
+      <!-- Tab Content: Metadata -->
+      <div class="tab-content" data-content="metadata" id="contentMetadata">
+        <div class="options-row">
+          <div class="option-group">
+            <label class="option-label">Định dạng metadata xuất ra</label>
+            <div class="chip-group" id="metadataFormatChips">
+              <button class="chip active" data-value="txt">TXT (Mô tả &amp; Tags)</button>
+            </div>
+          </div>
+          <p class="metadata-hint">Tạo báo cáo văn bản gồm tiêu đề, mô tả, kênh, ngày đăng, lượt xem và tags của video.</p>
+        </div>
+      </div>
+
       <!-- Tab Content: Bundle (Tải tất cả) -->
       <div class="tab-content" data-content="bundle" id="contentBundle">
         <div class="bundle-options-grid">
@@ -413,6 +416,16 @@
               </span>
             </label>
           </div>
+          <div class="bundle-card">
+            <label class="bundle-checkbox">
+              <input type="checkbox" id="bundleChkMetadata" checked>
+              <span class="checkbox-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></span>
+              <span class="bundle-label">
+                <svg class="bundle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                Metadata (TXT)
+              </span>
+            </label>
+          </div>
         </div>
       </div>
 
@@ -433,7 +446,7 @@
 
         <button class="download-btn" id="btnDownload" disabled>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          <span>Tải xuống</span>
+          <span>Thêm vào hàng đợi</span>
         </button>
         <button class="cancel-btn hidden" id="btnCancel">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -505,6 +518,33 @@
         </button>
       </div>
     </section>
+    </div>
+
+    <!-- ── Download Manager ── -->
+    <div class="view-panel" id="viewManager" role="tabpanel" aria-labelledby="navBtnManager" tabindex="0">
+      <div class="manager-subnav" role="tablist" aria-label="Trình quản lý tải xuống">
+        <button class="mgr-tab active" id="subBtnActiveQueue" type="button" role="tab" aria-selected="true" aria-controls="subContentActiveQueue">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <span>Đang tải &amp; hàng đợi</span>
+          <span class="subnav-badge" id="activeQueueBadge">0</span>
+        </button>
+        <button class="mgr-tab" id="subBtnCompletedHistory" type="button" role="tab" aria-selected="false" aria-controls="subContentCompletedHistory">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          <span>Đã hoàn tất</span>
+        </button>
+        <button class="mgr-danger-btn" id="btnClearHistoryManager" type="button">Xóa lịch sử</button>
+      </div>
+      <section class="mgr-subcontent active" id="subContentActiveQueue" role="tabpanel" aria-labelledby="subBtnActiveQueue">
+        <div class="task-queue-list" id="activeQueueList" aria-live="polite">
+          <p class="queue-empty">Chưa có tác vụ tải nào</p>
+        </div>
+      </section>
+      <section class="mgr-subcontent" id="subContentCompletedHistory" role="tabpanel" aria-labelledby="subBtnCompletedHistory">
+        <div class="history-grid-list" id="managerHistoryList" aria-live="polite">
+          <p class="history-empty">Chưa có lịch sử tải xuống nào</p>
+        </div>
+      </section>
+    </div>
 
     <!-- ── Error Toast ── -->
     <div class="toast hidden" id="toast">
