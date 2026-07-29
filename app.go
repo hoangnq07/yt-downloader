@@ -43,11 +43,11 @@ type App struct {
 
 type DownloadOptions struct {
 	URL        string `json:"url"`
-	Type       string `json:"type"`       // "video", "audio", "subtitle", "thumbnail", "metadata", "bundle"
-	Quality    string `json:"quality"`    // "best", "1080", "720", "480", "320", "192"
-	Format     string `json:"format"`     // "mp4", "mkv", "webm", "mp3", "m4a", "srt", "vtt", "jpg", "png", "txt"
-	SubLang    string `json:"subLang"`    // "vi", "en", etc.
-	ThumbRes   string `json:"thumbRes"`   // "maxresdefault", "hqdefault"
+	Type       string `json:"type"`     // "video", "audio", "subtitle", "thumbnail", "metadata", "bundle"
+	Quality    string `json:"quality"`  // "best", "1080", "720", "480", "320", "192"
+	Format     string `json:"format"`   // "mp4", "mkv", "webm", "mp3", "m4a", "srt", "vtt", "jpg", "png", "txt"
+	SubLang    string `json:"subLang"`  // "vi", "en", etc.
+	ThumbRes   string `json:"thumbRes"` // "maxresdefault", "hqdefault"
 	OutputPath string `json:"outputPath"`
 	Title      string `json:"title"`
 	Thumbnail  string `json:"thumbnail"`
@@ -74,6 +74,41 @@ func NewApp() *App {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+}
+
+func (a *App) appContext() context.Context {
+	if a.ctx != nil {
+		return a.ctx
+	}
+	return context.Background()
+}
+
+// CheckBinaries validates yt-dlp, ffmpeg, and ffprobe before the UI is enabled.
+func (a *App) CheckBinaries() BinaryStatus {
+	return a.binaryManager.Status(a.appContext())
+}
+
+// SetupBinaries downloads missing runtime tools and emits setup-status events
+// so the frontend can show progress instead of appearing frozen.
+func (a *App) SetupBinaries() (BinaryStatus, error) {
+	status, err := a.binaryManager.Ensure(a.appContext(), func(progress BinarySetupStatus) {
+		if a.ctx != nil {
+			runtime.EventsEmit(a.ctx, "setup-status", progress)
+		}
+	})
+	if err != nil {
+		if a.ctx != nil {
+			runtime.EventsEmit(a.ctx, "setup-status", BinarySetupStatus{
+				Step:    "setup",
+				Status:  "error",
+				Message: fmt.Sprintf("Không thể thiết lập công cụ: %v", err),
+				Percent: 0,
+				BinDir:  status.BinDir,
+			})
+		}
+		return status, err
+	}
+	return status, nil
 }
 
 // GetVideoInfo fetches video/playlist metadata using yt-dlp --dump-json
@@ -108,6 +143,10 @@ func (a *App) GetVideoInfo(url string) (map[string]interface{}, error) {
 
 // GetPlaylistInfo fetches playlist videos using yt-dlp --flat-playlist --dump-json
 func (a *App) GetPlaylistInfo(url string) ([]map[string]interface{}, error) {
+	if err := a.binaryManager.CheckOrReport(); err != nil {
+		return nil, err
+	}
+
 	args := a.binaryManager.BuildArgs(
 		"--flat-playlist",
 		"--dump-json",
@@ -141,6 +180,10 @@ func (a *App) GetPlaylistInfo(url string) ([]map[string]interface{}, error) {
 
 // StartDownloadTask starts an asynchronous non-blocking download task
 func (a *App) StartDownloadTask(opts DownloadOptions) (*DownloadTask, error) {
+	if err := a.binaryManager.CheckOrReport(); err != nil {
+		return nil, err
+	}
+
 	taskID := fmt.Sprintf("task_%d", time.Now().UnixNano())
 	targetFolder := opts.OutputPath
 	if targetFolder == "" {

@@ -35,6 +35,27 @@
     </div>
   </header>
 
+  <!-- ═══ First-run Tool Setup ═══ -->
+  <div class="setup-overlay" id="setupOverlay" role="dialog" aria-modal="true" aria-live="polite">
+    <div class="setup-card">
+      <div class="setup-icon" id="setupIcon" aria-hidden="true">
+        <svg viewBox="0 0 48 48" fill="none">
+          <circle cx="24" cy="24" r="20" stroke="currentColor" stroke-width="3" opacity="0.2"/>
+          <path d="M24 4a20 20 0 0 1 20 20" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <h2 class="setup-title" id="setupTitle">Đang kiểm tra công cụ...</h2>
+      <p class="setup-desc" id="setupMessage">Ứng dụng cần yt-dlp, FFmpeg và FFprobe để tải và xử lý video.</p>
+      <div class="setup-progress" id="setupProgress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div class="setup-progress-bar" id="setupProgressBar"></div>
+      </div>
+      <p class="setup-sub" id="setupSub">Lần thiết lập đầu tiên có thể mất vài phút.</p>
+      <div class="setup-actions hidden" id="setupActions">
+        <button class="setup-retry-btn" id="btnRetrySetup" type="button">Thử lại</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ═══ Settings Modal ═══ -->
   <div class="modal-overlay hidden" id="settingsModalOverlay">
     <div class="settings-modal" id="settingsModal">

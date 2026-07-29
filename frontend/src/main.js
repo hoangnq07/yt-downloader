@@ -11,7 +11,9 @@ import {
   SaveHistory,
   ClearHistory,
   GetSettings,
-  SaveSettings
+  SaveSettings,
+  CheckBinaries,
+  SetupBinaries
 } from '../wailsjs/go/main/App';
 
 import {
@@ -26,6 +28,116 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btnMinimize')?.addEventListener('click', () => WindowMinimise());
   document.getElementById('btnMaximize')?.addEventListener('click', () => WindowToggleMaximise());
   document.getElementById('btnClose')?.addEventListener('click', () => Quit());
+
+  // ═══ First-run Runtime Tool Setup ═══
+  const setupOverlay = document.getElementById('setupOverlay');
+  const setupTitle = document.getElementById('setupTitle');
+  const setupMessage = document.getElementById('setupMessage');
+  const setupProgress = document.getElementById('setupProgress');
+  const setupProgressBar = document.getElementById('setupProgressBar');
+  const setupSub = document.getElementById('setupSub');
+  const setupActions = document.getElementById('setupActions');
+  const btnRetrySetup = document.getElementById('btnRetrySetup');
+
+  function formatSetupBytes(value) {
+    const bytes = Math.max(0, Number(value) || 0);
+    if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+    if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${bytes} B`;
+  }
+
+  function updateSetupProgress(progress = {}) {
+    const percent = Math.max(0, Math.min(100, Number(progress.percent) || 0));
+    setupOverlay?.classList.remove('is-error');
+    if (setupTitle) {
+      const titles = {
+        checking: 'Đang kiểm tra công cụ...',
+        downloading: 'Đang tải công cụ cần thiết...',
+        extracting: 'Đang giải nén FFmpeg...',
+        validating: 'Đang xác thực công cụ...',
+        done: 'Thiết lập hoàn tất'
+      };
+      setupTitle.textContent = titles[progress.status] || 'Đang chuẩn bị ứng dụng...';
+    }
+    if (setupMessage && progress.message) setupMessage.textContent = progress.message;
+    if (setupProgressBar) setupProgressBar.style.width = `${percent}%`;
+    setupProgress?.setAttribute('aria-valuenow', String(Math.round(percent)));
+
+    const received = Number(progress.receivedBytes) || 0;
+    const total = Number(progress.totalBytes) || 0;
+    if (setupSub) {
+      if (received > 0 && total > 0) {
+        setupSub.textContent = `${formatSetupBytes(received)} / ${formatSetupBytes(total)} • ${Math.round(percent)}% tổng tiến độ`;
+      } else if (received > 0) {
+        setupSub.textContent = `${formatSetupBytes(received)} đã tải • ${Math.round(percent)}% tổng tiến độ`;
+      } else if (progress.binDir) {
+        setupSub.textContent = `Công cụ được lưu tại: ${progress.binDir}`;
+      }
+    }
+  }
+
+  function waitForSetupRetry() {
+    setupActions?.classList.remove('hidden');
+    return new Promise(resolve => {
+      btnRetrySetup.onclick = () => {
+        btnRetrySetup.onclick = null;
+        setupActions?.classList.add('hidden');
+        resolve();
+      };
+    });
+  }
+
+  async function ensureRuntimeTools() {
+    setupOverlay?.classList.remove('hidden');
+    const removeSetupListener = EventsOn('setup-status', updateSetupProgress);
+    try {
+      while (true) {
+        setupOverlay?.classList.remove('is-error');
+        setupActions?.classList.add('hidden');
+        updateSetupProgress({
+          status: 'checking',
+          message: 'Đang kiểm tra yt-dlp, FFmpeg và FFprobe...',
+          percent: 1
+        });
+
+        try {
+          let status = await CheckBinaries();
+          if (!status?.ready) {
+            status = await SetupBinaries();
+          }
+          if (!status?.ready) {
+            const missing = Array.isArray(status?.missing) ? status.missing.join(', ') : 'công cụ cần thiết';
+            throw new Error(`Thiết lập chưa hoàn tất: ${missing}`);
+          }
+
+          updateSetupProgress({
+            status: 'done',
+            message: 'yt-dlp, FFmpeg và FFprobe đã sẵn sàng.',
+            percent: 100,
+            binDir: status.binDir
+          });
+          await new Promise(resolve => setTimeout(resolve, 350));
+          setupOverlay?.classList.add('hidden');
+          return;
+        } catch (error) {
+          setupOverlay?.classList.add('is-error');
+          if (setupTitle) setupTitle.textContent = 'Không thể tải công cụ';
+          if (setupMessage) {
+            setupMessage.textContent = error?.message || String(error) || 'Vui lòng kiểm tra kết nối mạng.';
+          }
+          if (setupProgressBar) setupProgressBar.style.width = '0%';
+          setupProgress?.setAttribute('aria-valuenow', '0');
+          if (setupSub) setupSub.textContent = 'Kiểm tra kết nối Internet hoặc tường lửa, sau đó bấm Thử lại.';
+          await waitForSetupRetry();
+        }
+      }
+    } finally {
+      removeSetupListener?.();
+    }
+  }
+
+  await ensureRuntimeTools();
 
   // ═══ State Management ═══
   let videoInfo = null;

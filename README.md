@@ -18,8 +18,23 @@ Phiên bản chính sử dụng Wails v2, Go và Vite.
 - Go 1.22 trở lên.
 - Node.js 18 trở lên.
 - Wails CLI v2.
-- `yt-dlp.exe` trong `bin/` hoặc trên `PATH`.
-- `ffmpeg.exe` trong `bin/` hoặc trên `PATH` để ghép/chuyển đổi media.
+
+Khi phát triển, ứng dụng ưu tiên `yt-dlp.exe`, `ffmpeg.exe` và `ffprobe.exe`
+trong `bin/` hoặc trên `PATH`. Nếu thiếu, ứng dụng cũng có thể tự thiết lập
+giống bản phát hành.
+
+## Thiết lập công cụ lần đầu
+
+Installer không đóng gói các binary media dung lượng lớn. Trong lần chạy đầu,
+ứng dụng sẽ:
+
+1. Hiển thị màn hình tiến độ thiết lập.
+2. Tự tải và xác thực `yt-dlp`, `ffmpeg` và `ffprobe`.
+3. Lưu chúng trong `%LOCALAPPDATA%\YT Downloader Pro\bin`.
+4. Dùng lại các file này ở những lần chạy sau.
+
+Quá trình thiết lập cần kết nối Internet. Nếu tải thất bại, ứng dụng hiển thị
+lỗi và nút **Thử lại**; file tải dở `.part` được tự động dọn dẹp.
 
 ## Chạy ở chế độ development
 
@@ -59,7 +74,7 @@ Script tạo `build/appicon.png` và ICO đa kích thước tại
 
 ```text
 app.go                 Backend và task manager
-binaries.go            Phát hiện yt-dlp/ffmpeg
+binaries.go            Tải, xác thực và quản lý yt-dlp/FFmpeg
 history.go             Lưu history/settings
 main.go                Wails bootstrap
 frontend/              Vite frontend

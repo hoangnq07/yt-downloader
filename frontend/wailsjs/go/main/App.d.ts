@@ -4,6 +4,8 @@ import {main} from '../models';
 
 export function CancelDownloadTask(arg1:string):Promise<boolean>;
 
+export function CheckBinaries():Promise<main.BinaryStatus>;
+
 export function ClearHistory():Promise<boolean>;
 
 export function GetActiveTasks():Promise<Array<main.DownloadTask>>;
@@ -25,5 +27,7 @@ export function SaveHistory(arg1:Array<main.HistoryItem>):Promise<boolean>;
 export function SaveSettings(arg1:main.AppSettings):Promise<boolean>;
 
 export function SelectFolder():Promise<string>;
+
+export function SetupBinaries():Promise<main.BinaryStatus>;
 
 export function StartDownloadTask(arg1:main.DownloadOptions):Promise<main.DownloadTask>;

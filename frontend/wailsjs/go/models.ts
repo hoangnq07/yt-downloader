@@ -18,6 +18,28 @@ export namespace main {
 	        this.autoOpenFolder = source["autoOpenFolder"];
 	    }
 	}
+	export class BinaryStatus {
+	    ready: boolean;
+	    binDir: string;
+	    ytdlpPath: string;
+	    ffmpegPath: string;
+	    ffprobePath: string;
+	    missing: string[];
+
+	    static createFrom(source: any = {}) {
+	        return new BinaryStatus(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ready = source["ready"];
+	        this.binDir = source["binDir"];
+	        this.ytdlpPath = source["ytdlpPath"];
+	        this.ffmpegPath = source["ffmpegPath"];
+	        this.ffprobePath = source["ffprobePath"];
+	        this.missing = source["missing"];
+	    }
+	}
 	export class DownloadOptions {
 	    url: string;
 	    type: string;
@@ -139,4 +161,3 @@ export namespace main {
 	}
 
 }
-

@@ -6,6 +6,10 @@ export function CancelDownloadTask(arg1) {
   return window['go']['main']['App']['CancelDownloadTask'](arg1);
 }
 
+export function CheckBinaries() {
+  return window['go']['main']['App']['CheckBinaries']();
+}
+
 export function ClearHistory() {
   return window['go']['main']['App']['ClearHistory']();
 }
@@ -48,6 +52,10 @@ export function SaveSettings(arg1) {
 
 export function SelectFolder() {
   return window['go']['main']['App']['SelectFolder']();
+}
+
+export function SetupBinaries() {
+  return window['go']['main']['App']['SetupBinaries']();
 }
 
 export function StartDownloadTask(arg1) {

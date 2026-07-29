@@ -160,6 +160,12 @@ body {
 }
 
 .setup-card {
+  width: min(420px, calc(100vw - 48px));
+  padding: 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--bg-elevated);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
   text-align: center;
   display: flex;
   flex-direction: column;
@@ -171,21 +177,24 @@ body {
   width: 64px;
   height: 64px;
   animation: spin 1.5s linear infinite;
+  color: var(--primary);
 }
 
 .setup-title {
   font-size: 20px;
   font-weight: 700;
+  color: var(--text-primary);
 }
 
 .setup-desc {
   color: var(--text-secondary);
   font-size: 13px;
+  line-height: 1.6;
 }
 
 .setup-progress {
-  width: 280px;
-  height: 4px;
+  width: 100%;
+  height: 6px;
   background: var(--bg-elevated);
   border-radius: var(--radius-pill);
   overflow: hidden;
@@ -202,6 +211,41 @@ body {
 .setup-sub {
   color: var(--text-tertiary);
   font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.setup-actions {
+  display: flex;
+  justify-content: center;
+}
+
+.setup-retry-btn {
+  min-width: 120px;
+  padding: 10px 18px;
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s var(--ease), transform 0.2s var(--ease);
+}
+
+.setup-retry-btn:hover {
+  background: color-mix(in srgb, var(--primary) 24%, transparent);
+  transform: translateY(-1px);
+}
+
+.setup-overlay.is-error .setup-icon svg {
+  animation: none;
+  color: var(--error);
+}
+
+.setup-overlay.is-error .setup-progress-bar {
+  background: var(--error);
 }
 
 @keyframes spin {
@@ -2161,4 +2205,3 @@ body[data-theme="amber"] {
   opacity: 0.75;
   margin-left: 4px;
 }
-
