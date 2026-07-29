@@ -1,4 +1,18 @@
+# Dependencies
 node_modules/
+
+# Generated frontend and application bundles
+frontend/dist/
 dist/
-bin/*.exe
+build/bin/
+
+# Installer working files
+build/windows/installer/tmp/
+
+# Compiled Windows binaries
+*.exe
+*.exe~
+*.dll
+
+# Logs
 *.log
