@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YT Downloader Pro</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- ═══ Custom Title Bar ═══ -->
+  <header class="titlebar" id="titlebar" style="--wails-draggable:drag">
+    <div class="titlebar-drag">
+      <div class="titlebar-brand">
+        <svg class="titlebar-logo" viewBox="0 0 24 24" fill="none">
+          <path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-1.96C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 1.96A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-1.96c.32-1.74.46-3.53.46-5.33a29 29 0 0 0-.46-5.33z" fill="#FF0033"/>
+          <polygon points="9.75,15.02 15.5,11.75 9.75,8.48" fill="#fff"/>
+        </svg>
+        <span class="titlebar-title">YT Downloader Pro <span style="font-size: 10px; background: rgba(0, 173, 216, 0.2); color: #00ADD8; padding: 2px 6px; border-radius: 4px; margin-left: 6px; font-weight: 700;">MULTI-THREAD GO</span></span>
+      </div>
+    </div>
+    <div class="titlebar-controls" style="--wails-draggable:no-drag">
+      <button class="tb-btn tb-minimize" id="btnMinimize" title="Thu nhỏ">
+        <svg viewBox="0 0 12 12"><rect y="5" width="12" height="1.5" rx="0.75" fill="currentColor"/></svg>
+      </button>
+      <button class="tb-btn tb-maximize" id="btnMaximize" title="Phóng to">
+        <svg viewBox="0 0 12 12"><rect x="1" y="1" width="10" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3" fill="none"/></svg>
+      </button>
+      <button class="tb-btn tb-close" id="btnClose" title="Đóng">
+        <svg viewBox="0 0 12 12"><path d="M1.5 1.5L10.5 10.5M10.5 1.5L1.5 10.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ═══ Settings Modal ═══ -->
+  <div class="modal-overlay hidden" id="settingsModalOverlay">
+    <div class="settings-modal" id="settingsModal">
+      <div class="modal-header">
+        <div class="modal-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <span id="lblSettingsTitle">Cài đặt ứng dụng</span>
+        </div>
+        <button class="modal-close-btn" id="btnCloseSettings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <div class="settings-section">
+          <label class="settings-label" id="lblLang">Ngôn ngữ ứng dụng</label>
+          <div class="lang-grid">
+            <button class="lang-card active" data-lang="vi">
+              <span class="lang-flag">🇻🇳</span>
+              <span>Tiếng Việt</span>
+            </button>
+            <button class="lang-card" data-lang="en">
+              <span class="lang-flag">🇬🇧</span>
+              <span>English</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <label class="settings-label" id="lblTheme">Màu giao diện chủ đạo</label>
+          <div class="theme-grid">
+            <button class="theme-card active" data-theme="red">
+              <span class="theme-dot red"></span>
+              <span class="theme-name">YouTube Red</span>
+            </button>
+            <button class="theme-card" data-theme="indigo">
+              <span class="theme-dot indigo"></span>
+              <span class="theme-name">Cyberpunk Indigo</span>
+            </button>
+            <button class="theme-card" data-theme="green">
+              <span class="theme-dot green"></span>
+              <span class="theme-name">Emerald Green</span>
+            </button>
+            <button class="theme-card" data-theme="amber">
+              <span class="theme-dot amber"></span>
+              <span class="theme-name">Sunset Amber</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Main App Structure ═══ -->
+  <main class="app" id="mainApp">
+
+    <!-- ── Top Main View Navigation Bar ── -->
+    <div class="main-nav-bar">
+      <div class="nav-tabs-group">
+        <button class="nav-tab active" data-view="downloader" id="navBtnDownloader">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>Trang Tải xuống</span>
+        </button>
+
+        <button class="nav-tab" data-view="manager" id="navBtnManager">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><polygon points="12 11 12 17 17 14"/></svg>
+          <span>Quản lý Tải xuống & Lịch sử</span>
+          <span class="nav-queue-badge hidden" id="navQueueBadge">0</span>
+        </button>
+      </div>
+
+      <div class="nav-actions-right">
+        <button class="header-action-btn" id="btnSettingsToggle" title="Cài đặt">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <span id="btnSettingsText">Cài đặt</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         VIEW 1: DOWNLOADER VIEW (Input + Options + Queue Add)
+         ══════════════════════════════════════════════════════════════ -->
+    <div class="view-panel active" id="viewDownloader">
+      <!-- ── URL Input Section ── -->
+      <section class="url-section">
+        <div class="url-input-wrapper">
+          <div class="url-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+            </svg>
+          </div>
+          <input type="text" id="urlInput" class="url-input" placeholder="Dán link YouTube vào đây..." autocomplete="off" spellcheck="false">
+          <button class="url-paste-btn" id="btnPaste" title="Dán từ clipboard">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <rect x="9" y="9" width="13" height="13" rx="2"/>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+            <span>Paste</span>
+          </button>
+          <button class="url-clear-btn hidden" id="btnClear" title="Xóa">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+          <div class="url-loading hidden" id="urlLoading">
+            <div class="spinner-small"></div>
+          </div>
+        </div>
+        <p class="url-hint" id="urlHint">Hỗ trợ youtube.com, youtu.be, shorts, live, playlist</p>
+      </section>
+
+      <!-- ── Video Info Card ── -->
+      <section class="info-card hidden" id="infoCard">
+        <div class="info-thumbnail">
+          <img id="infoThumb" src="" alt="">
+          <div class="info-duration" id="infoDuration">0:00</div>
+        </div>
+        <div class="info-details">
+          <h2 class="info-title" id="infoTitle">Video Title</h2>
+          <div class="info-meta">
+            <span class="info-channel">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <span id="infoChannelName">Channel</span>
+            </span>
+            <span class="info-views" id="infoViewCount">0 lượt xem</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Playlist Card (Batch Download) ── -->
+      <section class="playlist-card hidden" id="playlistCard">
+        <div class="playlist-header">
+          <div class="playlist-title-group">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+            <span class="playlist-title" id="playlistTitle">YouTube Playlist</span>
+            <span class="playlist-count-badge" id="playlistCountBadge">0 video</span>
+          </div>
+          <div class="playlist-controls">
+            <label class="custom-checkbox">
+              <input type="checkbox" id="chkSelectAllPlaylist" checked>
+              <span class="checkmark"></span>
+              <span class="label-text">Chọn tất cả</span>
+            </label>
+          </div>
+        </div>
+        <div class="playlist-items-scroll" id="playlistItemsList"></div>
+      </section>
+
+      <!-- ── Download Panel ── -->
+      <section class="download-panel hidden" id="downloadPanel">
+        <!-- Tab Bar -->
+        <div class="tab-bar">
+          <button class="tab active" data-tab="video" id="tabVideo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+            <span>Video</span>
+          </button>
+          <button class="tab" data-tab="audio" id="tabAudio">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+            <span>Audio</span>
+          </button>
+          <button class="tab" data-tab="subtitle" id="tabSubtitle">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M7 15h4M15 15h2M7 11h2M13 11h4"/></svg>
+            <span>Phụ đề</span>
+          </button>
+          <button class="tab" data-tab="thumbnail" id="tabThumbnail">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+            <span>Thumbnail</span>
+          </button>
+          <button class="tab" data-tab="metadata" id="tabMetadata">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            <span>Metadata</span>
+          </button>
+          <button class="tab" data-tab="bundle" id="tabBundle">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            <span>Tải tất cả</span>
+          </button>
+        </div>
+
+        <!-- Tab Content: Video -->
+        <div class="tab-content active" data-content="video" id="contentVideo">
+          <div class="options-row">
+            <div class="option-group">
+              <label class="option-label">Chất lượng</label>
+              <div class="chip-group" id="videoQualityChips">
+                <button class="chip active" data-value="best">Best</button>
+                <button class="chip" data-value="2160">4K (2160p)</button>
+                <button class="chip" data-value="1080">1080p</button>
+                <button class="chip" data-value="720">720p</button>
+                <button class="chip" data-value="480">480p</button>
+                <button class="chip" data-value="360">360p</button>
+              </div>
+            </div>
+            <div class="option-group">
+              <label class="option-label">Định dạng</label>
+              <div class="chip-group" id="videoFormatChips">
+                <button class="chip active" data-value="mp4">MP4</button>
+                <button class="chip" data-value="mkv">MKV</button>
+                <button class="chip" data-value="webm">WEBM</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab Content: Audio -->
+        <div class="tab-content" data-content="audio" id="contentAudio">
+          <div class="options-row">
+            <div class="option-group">
+              <label class="option-label">Chất lượng âm thanh</label>
+              <div class="chip-group" id="audioQualityChips">
+                <button class="chip active" data-value="0">320kbps (Best)</button>
+                <button class="chip" data-value="2">192kbps</button>
+                <button class="chip" data-value="5">128kbps</button>
+              </div>
+            </div>
+            <div class="option-group">
+              <label class="option-label">Định dạng</label>
+              <div class="chip-group" id="audioFormatChips">
+                <button class="chip active" data-value="mp3">MP3</button>
+                <button class="chip" data-value="m4a">M4A</button>
+                <button class="chip" data-value="opus">OPUS</button>
+                <button class="chip" data-value="flac">FLAC</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab Content: Subtitle -->
+        <div class="tab-content" data-content="subtitle" id="contentSubtitle">
+          <div class="options-row">
+            <div class="option-group full-width">
+              <label class="option-label">Ngôn ngữ phụ đề khả dụng</label>
+              <div class="sub-chip-group" id="subtitleList">
+                <p class="empty-hint">Tự động lấy phụ đề khả dụng</p>
+              </div>
+            </div>
+            <div class="option-group">
+              <label class="option-label">Định dạng</label>
+              <div class="chip-group" id="subtitleFormatChips">
+                <button class="chip active" data-value="srt">SRT</button>
+                <button class="chip" data-value="vtt">VTT</button>
+                <button class="chip" data-value="ass">ASS</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab Content: Thumbnail -->
+        <div class="tab-content" data-content="thumbnail" id="contentThumbnail">
+          <div class="options-row">
+            <div class="option-group">
+              <label class="option-label">Chất lượng ảnh</label>
+              <div class="chip-group" id="thumbQualityChips">
+                <button class="chip active" data-value="maxresdefault">MaxRes (1080p)</button>
+                <button class="chip" data-value="sddefault">Standard (640p)</button>
+                <button class="chip" data-value="hqdefault">High (480p)</button>
+              </div>
+            </div>
+
+            <div class="option-group">
+              <label class="option-label">Định dạng</label>
+              <div class="chip-group" id="thumbFormatChips">
+                <button class="chip active" data-value="jpg">JPG</button>
+                <button class="chip" data-value="png">PNG</button>
+                <button class="chip" data-value="webp">WEBP</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab Content: Metadata -->
+        <div class="tab-content" data-content="metadata" id="contentMetadata">
+          <div class="options-row">
+            <div class="option-group">
+              <label class="option-label">Định dạng Metadata xuất ra</label>
+              <div class="chip-group" id="metadataFormatChips">
+                <button class="chip active" data-value="txt">TXT (Mô tả & Tags)</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab Content: Bundle (Tải tất cả) -->
+        <div class="tab-content" data-content="bundle" id="contentBundle">
+          <div class="bundle-options-grid">
+            <div class="bundle-card">
+              <label class="bundle-checkbox">
+                <input type="checkbox" id="bundleChkVideo" checked>
+                <span class="checkbox-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></span>
+                <span class="bundle-label">Video (MP4)</span>
+              </label>
+            </div>
+
+            <div class="bundle-card">
+              <label class="bundle-checkbox">
+                <input type="checkbox" id="bundleChkAudio" checked>
+                <span class="checkbox-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></span>
+                <span class="bundle-label">Audio (MP3)</span>
+              </label>
+            </div>
+
+            <div class="bundle-card">
+              <label class="bundle-checkbox">
+                <input type="checkbox" id="bundleChkSubtitle">
+                <span class="checkbox-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></span>
+                <span class="bundle-label">Phụ đề (SRT)</span>
+              </label>
+            </div>
+
+            <div class="bundle-card">
+              <label class="bundle-checkbox">
+                <input type="checkbox" id="bundleChkThumbnail" checked>
+                <span class="checkbox-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></span>
+                <span class="bundle-label">Thumbnail (MaxRes)</span>
+              </label>
+            </div>
+
+            <div class="bundle-card">
+              <label class="bundle-checkbox">
+                <input type="checkbox" id="bundleChkMetadata" checked>
+                <span class="checkbox-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></span>
+                <span class="bundle-label">Metadata (TXT)</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Bar (Non-Blocking Download Button) -->
+        <div class="action-bar">
+          <button class="folder-btn" id="btnFolder" title="Chọn thư mục lưu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            <span id="folderPath" class="folder-path">~/Downloads/YT-Downloader</span>
+          </button>
+
+          <label class="auto-open-toggle" title="Tự động mở thư mục chứa file sau khi tải xong">
+            <input type="checkbox" id="chkAutoOpenFolder">
+            <span class="checkbox-box">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </span>
+            <span>Tự mở thư mục</span>
+          </label>
+
+          <button class="download-btn" id="btnDownload">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span>+ Bắt đầu tải</span>
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         VIEW 2: DOWNLOAD MANAGER & HISTORY VIEW
+         ══════════════════════════════════════════════════════════════ -->
+    <div class="view-panel" id="viewManager">
+      <div class="manager-subnav">
+        <button class="mgr-tab active" data-sub="activeQueue" id="subBtnActiveQueue">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <span>Đang tải & Hàng đợi</span>
+          <span class="subnav-badge" id="activeQueueBadge">0</span>
+        </button>
+        <button class="mgr-tab" data-sub="completedHistory" id="subBtnCompletedHistory">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          <span>Lịch sử đã tải hoàn tất</span>
+        </button>
+        <button class="mgr-danger-btn" id="btnClearHistoryManager">Xóa toàn bộ lịch sử</button>
+      </div>
+
+      <!-- Manager Sub-View 1: Active Tasks Queue -->
+      <div class="mgr-subcontent active" id="subContentActiveQueue">
+        <div class="task-queue-list" id="activeQueueList">
+          <p class="queue-empty">Chưa có tiến trình tải nào đang chạy</p>
+        </div>
+      </div>
+
+      <!-- Manager Sub-View 2: Completed History -->
+      <div class="mgr-subcontent" id="subContentCompletedHistory">
+        <div class="history-grid-list" id="managerHistoryList">
+          <p class="history-empty">Chưa có lịch sử tải xuống nào</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Error / Info Toast ── -->
+    <div class="toast hidden" id="toast">
+      <span class="toast-icon"></span>
+      <span id="toastMessage">Error</span>
+    </div>
+
+  </main>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
