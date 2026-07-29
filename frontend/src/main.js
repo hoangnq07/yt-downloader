@@ -459,7 +459,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (task && task.id) {
         activeTasksMap.set(task.id, task);
         updateQueueBadges();
-        showToast(`🚀 Đã thêm "${task.title}" vào hàng đợi tải!`, 'success');
+        showToast(`Đã thêm "${task.title}" vào hàng đợi tải!`, 'success');
       }
     } catch (err) {
       showToast(`❌ Lỗi khởi tạo: ${err.message || err}`, 'error');
