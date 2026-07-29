@@ -3,7 +3,6 @@ $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.Drawing
 
 $projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-$rendererIconPath = Join-Path $projectRoot "renderer\icon.png"
 $wailsIconPath = Join-Path $projectRoot "build\appicon.png"
 $windowsIconPath = Join-Path $projectRoot "build\windows\icon.ico"
 
@@ -148,15 +147,12 @@ function Save-WindowsIcon {
     }
 }
 
-New-Item -ItemType Directory -Path (Split-Path -Parent $rendererIconPath) -Force | Out-Null
 New-Item -ItemType Directory -Path (Split-Path -Parent $wailsIconPath) -Force | Out-Null
 New-Item -ItemType Directory -Path (Split-Path -Parent $windowsIconPath) -Force | Out-Null
 
-Save-PngIcon -Size 256 -Path $rendererIconPath
 Save-PngIcon -Size 1024 -Path $wailsIconPath
 Save-WindowsIcon -Path $windowsIconPath
 
-Write-Host "Generated app icons:"
-Write-Host "  $rendererIconPath (256x256 PNG)"
+Write-Host "Generated Wails app icons:"
 Write-Host "  $wailsIconPath (1024x1024 PNG)"
 Write-Host "  $windowsIconPath (16-256px ICO)"

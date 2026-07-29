@@ -1,51 +1,70 @@
-# 🎬 YT Downloader Pro
+# YT Downloader Pro — Wails
 
-Ứng dụng desktop tải video, audio, phụ đề và thumbnail YouTube nhanh chóng với giao diện hiện đại, sử dụng **yt-dlp** làm engine.
+Ứng dụng desktop tải video, audio, phụ đề, thumbnail và metadata YouTube.
+Phiên bản chính sử dụng Wails v2, Go và Vite.
 
----
+## Tính năng
 
-## ⚡ Yêu cầu
+- Nhiều tác vụ tải chạy đồng thời, không khóa giao diện.
+- Theo dõi tiến độ, tốc độ và ETA theo từng tác vụ.
+- Hủy riêng từng tác vụ.
+- Tải video, audio, phụ đề, thumbnail hoặc một bundle tùy chọn.
+- Xuất báo cáo metadata/SEO dạng TXT.
+- Quản lý lịch sử tải xuống và cài đặt ứng dụng.
+- Hỗ trợ playlist, nhiều giao diện màu và tiếng Việt/English.
 
-- **Node.js** v18+ (đã cài sẵn)
-- **Kết nối Internet** (lần đầu để tải yt-dlp & ffmpeg tự động)
+## Yêu cầu phát triển
 
-## 🚀 Cài đặt & Khởi chạy
+- Go 1.22 trở lên.
+- Node.js 18 trở lên.
+- Wails CLI v2.
+- `yt-dlp.exe` trong `bin/` hoặc trên `PATH`.
+- `ffmpeg.exe` trong `bin/` hoặc trên `PATH` để ghép/chuyển đổi media.
 
-```bash
-cd d:\Code\scripts\yt-downloader-pro
+## Chạy ở chế độ development
 
-# Cài đặt dependencies (chỉ cần 1 lần)
-npm install
-
-# Chạy ứng dụng
-npm start
+```powershell
+wails dev
 ```
 
-> **Lưu ý**: Lần đầu khởi chạy, app sẽ tự động tải `yt-dlp.exe` (~13MB) và `ffmpeg.exe` (~100MB) vào thư mục `bin/`. Chỉ cần thực hiện 1 lần duy nhất.
+## Build ứng dụng
 
-## 📖 Hướng dẫn sử dụng
-
-1. **Paste link YouTube** vào ô nhập hoặc bấm nút Paste.
-2. App tự động hiển thị thông tin video (title, thumbnail, channel, views).
-3. **Chọn tab** muốn tải:
-   - 🎬 **Video** → chọn chất lượng (4K/1080p/720p...) và format (MP4/MKV/WEBM)
-   - 🎵 **Audio** → chọn bitrate (320/192/128kbps) và format (MP3/M4A/OPUS/FLAC)
-   - 📝 **Phụ đề** → chọn ngôn ngữ và format (SRT/VTT/ASS)
-   - 🖼️ **Thumbnail** → chọn format (JPG/PNG/WEBP)
-4. **Chọn thư mục lưu** (mặc định: `~/Downloads/YT-Downloader`)
-5. Bấm **Tải xuống** → xem progress realtime → hoàn tất!
-
-## 📂 Cấu trúc project
-
+```powershell
+wails build -platform windows/amd64 -clean
 ```
-yt-downloader-pro/
-├── main.js         # Electron main process
-├── preload.js      # IPC bridge
-├── setup.js        # Auto-download yt-dlp & ffmpeg
-├── package.json
-├── bin/            # (auto-created) yt-dlp.exe, ffmpeg.exe
-└── renderer/
-    ├── index.html  # UI layout
-    ├── styles.css  # Dark glassmorphism theme
-    └── app.js      # Frontend logic
+
+Binary được tạo tại `build/bin/yt-downloader-pro.exe`.
+
+## Build installer Windows
+
+Cài NSIS và bảo đảm `makensis.exe` có trên `PATH`, sau đó chạy:
+
+```powershell
+wails build -platform windows/amd64 -nsis -clean
 ```
+
+Installer được tạo tại
+`build/bin/YT Downloader Pro-amd64-installer.exe`.
+
+## Tạo lại icon
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build_icon.ps1
+```
+
+Script tạo `build/appicon.png` và ICO đa kích thước tại
+`build/windows/icon.ico`.
+
+## Cấu trúc chính
+
+```text
+app.go                 Backend và task manager
+binaries.go            Phát hiện yt-dlp/ffmpeg
+history.go             Lưu history/settings
+main.go                Wails bootstrap
+frontend/              Vite frontend
+build/                 Icon, manifest và cấu hình installer
+wails.json             Cấu hình Wails
+```
+
+Phiên bản Electron được duy trì độc lập trên nhánh `electron-version`.
