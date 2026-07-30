@@ -31,6 +31,7 @@ type DownloadTask struct {
 	FilePath   string  `json:"filePath"`
 	FolderPath string  `json:"folderPath"`
 	Date       string  `json:"date"`
+	Error      string  `json:"error,omitempty"`
 }
 
 type App struct {
@@ -43,17 +44,18 @@ type App struct {
 }
 
 type DownloadOptions struct {
-	URL        string `json:"url"`
-	Type       string `json:"type"`     // "video", "audio", "subtitle", "thumbnail", "metadata", "bundle"
-	Quality    string `json:"quality"`  // "best", "1080", "720", "480", "320", "192"
-	Format     string `json:"format"`   // "mp4", "mkv", "webm", "mp3", "m4a", "srt", "vtt", "jpg", "png", "txt"
-	SubLang    string `json:"subLang"`  // "vi", "en", etc.
-	ThumbRes   string `json:"thumbRes"` // "maxresdefault", "hqdefault"
-	OutputPath string `json:"outputPath"`
-	Title      string `json:"title"`
-	Thumbnail  string `json:"thumbnail"`
-	Channel    string `json:"channel"`
-	BundleOpts struct {
+	URL              string `json:"url"`
+	Type             string `json:"type"`     // "video", "audio", "subtitle", "thumbnail", "metadata", "bundle"
+	Quality          string `json:"quality"`  // "best", "1080", "720", "480", "320", "192"
+	Format           string `json:"format"`   // "mp4", "mkv", "webm", "mp3", "m4a", "srt", "vtt", "jpg", "png", "txt"
+	SubLang          string `json:"subLang"`  // "vi", "en", etc.
+	ThumbRes         string `json:"thumbRes"` // "maxresdefault", "hqdefault"
+	OutputPath       string `json:"outputPath"`
+	Title            string `json:"title"`
+	Thumbnail        string `json:"thumbnail"`
+	Channel          string `json:"channel"`
+	BrowserCaptureID string `json:"browserCaptureId,omitempty"`
+	BundleOpts       struct {
 		Video     bool   `json:"video"`
 		VideoQual string `json:"videoQual"`
 		Audio     bool   `json:"audio"`
@@ -298,6 +300,10 @@ func (a *App) StartDownloadTask(opts DownloadOptions) (*DownloadTask, error) {
 
 func (a *App) executeTask(task *DownloadTask, opts DownloadOptions) {
 	targetFolder := task.FolderPath
+	if opts.BrowserCaptureID != "" {
+		a.executeBrowserBridgeTask(task, opts)
+		return
+	}
 
 	// Handle Instant Metadata Generation
 	if opts.Type == "metadata" {

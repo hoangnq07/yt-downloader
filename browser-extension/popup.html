@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YT Downloader Pro Assets</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main>
+    <header class="brand">
+      <img class="logo" src="icons/icon48.png" alt="">
+      <div>
+        <h1>YouTube Assets</h1>
+        <p>Thumbnail · Metadata · Subtitle</p>
+      </div>
+    </header>
+
+    <section class="video-summary">
+      <img id="videoThumb" alt="" hidden>
+      <div>
+        <p class="title" id="videoTitle">Đang đọc video…</p>
+        <p class="channel" id="videoChannel"></p>
+      </div>
+    </section>
+
+    <section class="asset-card">
+      <div class="asset-heading">
+        <strong>Thumbnail</strong>
+        <span>Ảnh bìa video</span>
+      </div>
+      <div class="control-row">
+        <select id="thumbnailQuality" aria-label="Chất lượng thumbnail">
+          <option value="best">Tốt nhất có sẵn</option>
+          <option value="maxresdefault">Max Resolution</option>
+          <option value="sddefault">Standard</option>
+          <option value="hqdefault">High Quality</option>
+        </select>
+        <button id="downloadThumbnail" disabled>Tải JPG</button>
+      </div>
+    </section>
+
+    <section class="asset-card">
+      <div class="asset-heading">
+        <strong>Metadata & SEO</strong>
+        <span>Tiêu đề, mô tả, tag, hashtag…</span>
+      </div>
+      <button class="full-button" id="downloadMetadataTxt" disabled>Tải báo cáo TXT</button>
+    </section>
+
+    <section class="asset-card">
+      <div class="asset-heading">
+        <strong>Phụ đề</strong>
+        <span id="subtitleCount">Đang tìm track…</span>
+      </div>
+      <select id="subtitleTrack" aria-label="Ngôn ngữ phụ đề" disabled>
+        <option value="">Không có phụ đề</option>
+      </select>
+      <div class="control-row subtitle-actions">
+        <select id="subtitleFormat" aria-label="Định dạng phụ đề">
+          <option value="srt">SRT</option>
+          <option value="vtt">VTT</option>
+          <option value="json">JSON</option>
+        </select>
+        <button id="downloadSubtitle" disabled>Tải phụ đề</button>
+      </div>
+    </section>
+
+    <p class="savior-hint">Video và MP3: sử dụng Savior của Cốc Cốc.</p>
+    <p class="status" id="status" role="status" aria-live="polite"></p>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>

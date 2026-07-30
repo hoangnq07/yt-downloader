@@ -12,6 +12,26 @@ Phiên bản chính sử dụng Wails v2, Go và Vite.
 - Xuất báo cáo metadata/SEO dạng TXT.
 - Quản lý lịch sử tải xuống và cài đặt ứng dụng.
 - Hỗ trợ playlist, nhiều giao diện màu và tiếng Việt/English.
+- YouTube Assets Extension cho Cốc Cốc/Chrome: tải thumbnail, metadata và phụ đề trực tiếp từ tab video.
+
+## YouTube Assets Extension
+
+Extension hoạt động độc lập với app sau khi được nạp vào Cốc Cốc/Chrome. Video và MP3 được tải bằng
+Savior của Cốc Cốc; extension tập trung vào các asset nhẹ và ổn định hơn:
+
+- Thumbnail JPG với nhiều mức chất lượng.
+- Báo cáo metadata/SEO dạng TXT: tiêu đề, mô tả, tag/keyword, hashtag, chapter và các chỉ số SEO tham khảo.
+- Phụ đề chính thức và tự động dạng SRT, VTT hoặc JSON.
+
+1. Mở **Cài đặt > YouTube Assets Extension** trong ứng dụng và bấm **Chuẩn bị Assets Extension**.
+2. Mở `coccoc://extensions` hoặc `chrome://extensions`.
+3. Bật chế độ dành cho nhà phát triển, chọn **Tải tiện ích đã giải nén** và chọn thư mục app vừa mở.
+4. Mở video YouTube rồi bấm extension **YT Downloader Pro Assets**.
+5. Chọn thumbnail, metadata hoặc track phụ đề cần tải.
+
+Nếu đã nạp Browser Bridge cũ, bấm **Tải lại/Reload** tại trang Extensions sau khi app chuẩn bị lại thư mục.
+
+Chỉ tải nội dung bạn sở hữu hoặc được phép tải.
 
 ## Yêu cầu phát triển
 

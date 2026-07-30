@@ -1,0 +1,208 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  width: 390px;
+  margin: 0;
+  color: #f4f4f5;
+  background: #09090b;
+}
+
+main {
+  padding: 16px;
+}
+
+.brand,
+.video-summary,
+.control-row,
+.asset-heading {
+  display: flex;
+  align-items: center;
+}
+
+.brand {
+  gap: 10px;
+}
+
+.logo {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+h1,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: 14px;
+}
+
+.brand p,
+.channel,
+.asset-heading span,
+.savior-hint {
+  color: #a1a1aa;
+  font-size: 11px;
+}
+
+.brand p {
+  margin-top: 2px;
+}
+
+.video-summary {
+  gap: 10px;
+  min-height: 58px;
+  margin-top: 14px;
+  padding: 9px;
+  border: 1px solid #27272a;
+  border-radius: 10px;
+  background: #111113;
+}
+
+.video-summary img {
+  width: 70px;
+  height: 40px;
+  flex: 0 0 auto;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.video-summary > div {
+  min-width: 0;
+}
+
+.title {
+  overflow: hidden;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.channel {
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asset-card {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid #27272a;
+  border-radius: 10px;
+  background: #18181b;
+}
+
+.asset-heading {
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 9px;
+}
+
+.asset-heading strong {
+  font-size: 12px;
+}
+
+.control-row {
+  gap: 8px;
+}
+
+.button-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.full-button {
+  width: 100%;
+}
+
+select,
+button {
+  min-height: 36px;
+  border-radius: 8px;
+  font: inherit;
+}
+
+select {
+  min-width: 0;
+  flex: 1;
+  padding: 0 9px;
+  border: 1px solid #3f3f46;
+  color: #e4e4e7;
+  background: #09090b;
+  font-size: 11px;
+}
+
+button {
+  padding: 0 13px;
+  border: 0;
+  color: #fff;
+  background: #ef233c;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+button:hover:not(:disabled) {
+  background: #ff334e;
+}
+
+button:disabled,
+select:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+
+#subtitleTrack {
+  width: 100%;
+}
+
+.subtitle-actions {
+  margin-top: 8px;
+}
+
+#subtitleFormat {
+  flex: 0 0 90px;
+}
+
+#downloadSubtitle {
+  flex: 1;
+}
+
+.savior-hint {
+  margin-top: 12px;
+  text-align: center;
+}
+
+.status {
+  min-height: 16px;
+  margin-top: 8px;
+  font-size: 11px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.status.success {
+  color: #34d399;
+}
+
+.status.error {
+  color: #fb7185;
+}
+
+.status.running {
+  color: #60a5fa;
+}

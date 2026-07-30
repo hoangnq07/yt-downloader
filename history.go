@@ -21,10 +21,11 @@ type HistoryItem struct {
 }
 
 type AppSettings struct {
-	Language         string `json:"language"`
-	Theme            string `json:"theme"`
-	DownloadPath     string `json:"downloadPath"`
-	AutoOpenFolder   bool   `json:"autoOpenFolder"`
+	Language        string `json:"language"`
+	Theme           string `json:"theme"`
+	DownloadPath    string `json:"downloadPath"`
+	AutoOpenFolder  bool   `json:"autoOpenFolder"`
+	BrowserProxyURL string `json:"browserProxyUrl"`
 }
 
 type Storage struct {
@@ -82,10 +83,11 @@ func (s *Storage) LoadSettings() AppSettings {
 
 	defaultPath := filepath.Join(os.Getenv("USERPROFILE"), "Downloads", "YT-Downloader")
 	defaultSettings := AppSettings{
-		Language:       "vi",
-		Theme:          "red",
-		DownloadPath:   defaultPath,
-		AutoOpenFolder: false,
+		Language:        "vi",
+		Theme:           "red",
+		DownloadPath:    defaultPath,
+		AutoOpenFolder:  false,
+		BrowserProxyURL: "",
 	}
 
 	data, err := os.ReadFile(s.settingsFile)

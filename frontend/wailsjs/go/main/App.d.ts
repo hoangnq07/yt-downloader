@@ -10,6 +10,10 @@ export function ClearHistory():Promise<boolean>;
 
 export function GetActiveTasks():Promise<Array<main.DownloadTask>>;
 
+export function GetBrowserBridgeCapture(arg1:string):Promise<main.BrowserBridgeCapture>;
+
+export function GetBrowserBridgeStatus():Promise<main.BrowserBridgeStatus>;
+
 export function GetHistory():Promise<Array<main.HistoryItem>>;
 
 export function GetPlaylistInfo(arg1:string):Promise<Array<Record<string, any>>>;
@@ -17,6 +21,10 @@ export function GetPlaylistInfo(arg1:string):Promise<Array<Record<string, any>>>
 export function GetSettings():Promise<main.AppSettings>;
 
 export function GetVideoInfo(arg1:string):Promise<Record<string, any>>;
+
+export function InstallBrowserBridge():Promise<main.BrowserBridgeStatus>;
+
+export function OpenBrowserBridgeFolder():Promise<void>;
 
 export function OpenFile(arg1:string):Promise<void>;
 
@@ -31,3 +39,5 @@ export function SelectFolder():Promise<string>;
 export function SetupBinaries():Promise<main.BinaryStatus>;
 
 export function StartDownloadTask(arg1:main.DownloadOptions):Promise<main.DownloadTask>;
+
+export function TestBrowserBridgeProxy(arg1:string):Promise<string>;

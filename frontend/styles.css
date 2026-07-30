@@ -390,6 +390,127 @@ body {
   color: var(--success);
 }
 
+.browser-bridge-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--primary) 45%, var(--border));
+  border-radius: var(--radius-md);
+  background: var(--primary-soft);
+}
+
+.browser-bridge-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.browser-bridge-copy strong {
+  color: var(--text-primary);
+  font-size: 12.5px;
+}
+
+.browser-bridge-copy span,
+.bridge-settings-desc,
+.bridge-install-steps,
+.bridge-extension-path {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.browser-bridge-actions,
+.bridge-settings-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.bridge-settings-actions {
+  flex-wrap: wrap;
+}
+
+.bridge-proxy-box {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: rgba(9, 9, 11, .3);
+}
+
+.bridge-proxy-box label {
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.bridge-proxy-box p {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+
+.bridge-proxy-row {
+  display: flex;
+  gap: 7px;
+}
+
+.bridge-proxy-row input {
+  min-width: 0;
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid var(--border-hover);
+  border-radius: var(--radius-sm);
+  outline: none;
+  color: var(--text-primary);
+  background: var(--bg-main);
+  font-family: var(--font);
+  font-size: 11.5px;
+}
+
+.bridge-proxy-row input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-soft);
+}
+
+.bridge-primary-btn,
+.bridge-secondary-btn {
+  padding: 8px 11px;
+  border: 1px solid var(--border-hover);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  background: var(--bg-card-hover);
+  font-family: var(--font);
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--duration) var(--ease);
+}
+
+.bridge-primary-btn {
+  border-color: var(--primary);
+  color: white;
+  background: var(--primary);
+}
+
+.bridge-primary-btn:hover,
+.bridge-secondary-btn:hover {
+  color: white;
+  border-color: var(--primary);
+  box-shadow: 0 0 12px var(--primary-glow);
+}
+
+.bridge-primary-btn:disabled {
+  cursor: wait;
+  opacity: .6;
+}
+
 /* ══════════════════════════════════════════════════════════════
    VIDEO INFO CARD
    ══════════════════════════════════════════════════════════════ */
@@ -783,6 +904,11 @@ body {
   background: var(--primary);
   border-radius: 2px 2px 0 0;
   box-shadow: 0 0 12px var(--primary-glow);
+}
+
+.tab.bridge-unavailable {
+  cursor: not-allowed;
+  opacity: .35;
 }
 
 /* ── Tab Content ── */
@@ -1470,7 +1596,8 @@ body {
   border: 1px solid var(--border-hover);
   border-radius: var(--radius-pill);
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
-  z-index: 200;
+  /* Keep feedback visible above settings/history overlays. */
+  z-index: 1000;
   animation: toastSlide 0.3s var(--ease);
 }
 
@@ -1684,6 +1811,8 @@ body[data-theme="amber"] {
   display: flex;
   flex-direction: column;
   gap: 20px;
+  max-height: min(680px, 75vh);
+  overflow-y: auto;
 }
 
 .settings-section {
@@ -1698,6 +1827,43 @@ body[data-theme="amber"] {
   color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
+}
+
+.browser-bridge-settings {
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.bridge-settings-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.bridge-status-badge {
+  padding: 3px 7px;
+  border: 1px solid rgba(251, 113, 133, .35);
+  border-radius: var(--radius-pill);
+  color: #fb7185;
+  background: rgba(251, 113, 133, .1);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.bridge-status-badge.ready {
+  border-color: rgba(52, 211, 153, .35);
+  color: #34d399;
+  background: rgba(52, 211, 153, .1);
+}
+
+.bridge-install-steps {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.bridge-extension-path {
+  overflow-wrap: anywhere;
+  color: var(--text-secondary);
 }
 
 .lang-grid {

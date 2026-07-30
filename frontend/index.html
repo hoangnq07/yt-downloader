@@ -105,6 +105,26 @@
             </button>
           </div>
         </div>
+
+        <div class="settings-section browser-bridge-settings">
+          <div class="bridge-settings-heading">
+            <label class="settings-label">YouTube Assets Extension</label>
+            <span class="bridge-status-badge" id="bridgeSettingsBadge">Chưa cài</span>
+          </div>
+          <p class="bridge-settings-desc">Extension độc lập để tải thumbnail, báo cáo metadata/SEO dạng TXT và phụ đề SRT/VTT/JSON. Video và MP3 dùng Savior của Cốc Cốc.</p>
+          <div class="bridge-settings-actions">
+            <button class="bridge-secondary-btn" id="btnInstallBrowserBridgeSettings">Chuẩn bị Assets Extension</button>
+            <button class="bridge-secondary-btn" id="btnOpenBrowserBridgeFolder">Mở thư mục extension</button>
+            <button class="bridge-secondary-btn" id="btnCopyBrowserBridgePath">Sao chép đường dẫn</button>
+          </div>
+          <ol class="bridge-install-steps">
+            <li>Mở <strong>coccoc://extensions</strong> hoặc <strong>chrome://extensions</strong>.</li>
+            <li>Bật Chế độ dành cho nhà phát triển và chọn “Tải tiện ích đã giải nén”.</li>
+            <li>Chọn thư mục extension do app mở ra.</li>
+            <li>Nếu extension đã được nạp trước đó, bấm <strong>Tải lại/Reload</strong> để nhận phiên bản 2.1.1.</li>
+          </ol>
+          <p class="bridge-extension-path" id="bridgeExtensionPath"></p>
+        </div>
       </div>
     </div>
   </div>
@@ -166,6 +186,15 @@
           </div>
         </div>
         <p class="url-hint" id="urlHint">Hỗ trợ youtube.com, youtu.be, shorts, live, playlist</p>
+        <div class="browser-bridge-panel hidden" id="browserBridgePanel">
+          <div class="browser-bridge-copy">
+            <strong>Dùng Savior cho video và MP3</strong>
+            <span>Assets Extension chỉ tải thumbnail, metadata và phụ đề trực tiếp từ tab YouTube.</span>
+          </div>
+          <div class="browser-bridge-actions">
+            <button class="bridge-secondary-btn" id="btnInstallBrowserBridge">Cài Assets Extension</button>
+          </div>
+        </div>
       </section>
 
       <!-- ── Video Info Card ── -->

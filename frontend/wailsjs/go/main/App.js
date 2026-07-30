@@ -18,6 +18,14 @@ export function GetActiveTasks() {
   return window['go']['main']['App']['GetActiveTasks']();
 }
 
+export function GetBrowserBridgeCapture(arg1) {
+  return window['go']['main']['App']['GetBrowserBridgeCapture'](arg1);
+}
+
+export function GetBrowserBridgeStatus() {
+  return window['go']['main']['App']['GetBrowserBridgeStatus']();
+}
+
 export function GetHistory() {
   return window['go']['main']['App']['GetHistory']();
 }
@@ -32,6 +40,14 @@ export function GetSettings() {
 
 export function GetVideoInfo(arg1) {
   return window['go']['main']['App']['GetVideoInfo'](arg1);
+}
+
+export function InstallBrowserBridge() {
+  return window['go']['main']['App']['InstallBrowserBridge']();
+}
+
+export function OpenBrowserBridgeFolder() {
+  return window['go']['main']['App']['OpenBrowserBridgeFolder']();
 }
 
 export function OpenFile(arg1) {
@@ -60,4 +76,8 @@ export function SetupBinaries() {
 
 export function StartDownloadTask(arg1) {
   return window['go']['main']['App']['StartDownloadTask'](arg1);
+}
+
+export function TestBrowserBridgeProxy(arg1) {
+  return window['go']['main']['App']['TestBrowserBridgeProxy'](arg1);
 }

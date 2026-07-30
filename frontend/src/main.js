@@ -13,7 +13,12 @@ import {
   GetSettings,
   SaveSettings,
   CheckBinaries,
-  SetupBinaries
+  SetupBinaries,
+  InstallBrowserBridge,
+  GetBrowserBridgeStatus,
+  OpenBrowserBridgeFolder,
+  GetBrowserBridgeCapture,
+  TestBrowserBridgeProxy
 } from '../wailsjs/go/main/App';
 
 import {
@@ -141,6 +146,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ═══ State Management ═══
   let videoInfo = null;
+  let browserCapture = null;
   let currentTab = 'video';
   let activeTasksMap = new Map();
 
@@ -148,7 +154,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     language: 'vi',
     theme: 'red',
     downloadPath: '',
-    autoOpenFolder: false
+    autoOpenFolder: false,
+    browserProxyUrl: ''
   };
 
   const selections = {
@@ -168,6 +175,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       document.getElementById('folderPath').textContent = formatDisplayPath(currentSettings.downloadPath);
     }
     document.getElementById('chkAutoOpenFolder').checked = currentSettings.autoOpenFolder;
+    const browserProxyInput = document.getElementById('browserProxyUrl');
+    if (browserProxyInput) browserProxyInput.value = currentSettings.browserProxyUrl || '';
   } catch (e) {
     console.error(e);
   }
@@ -230,6 +239,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const settingsModalOverlay = document.getElementById('settingsModalOverlay');
   document.getElementById('btnSettingsToggle')?.addEventListener('click', () => {
     settingsModalOverlay.classList.remove('hidden');
+    refreshBrowserBridgeStatus();
   });
   document.getElementById('btnCloseSettings')?.addEventListener('click', () => {
     settingsModalOverlay.classList.add('hidden');
@@ -264,6 +274,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   tabs.forEach(tab => {
     tab.addEventListener('click', () => {
+      if (tab.classList.contains('bridge-unavailable')) {
+        showToast('Browser Bridge hiện chỉ hỗ trợ tải video hoặc audio.', 'error');
+        return;
+      }
       const target = tab.getAttribute('data-tab');
       if (!target) return;
       currentTab = target;
@@ -310,6 +324,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const btnClear = document.getElementById('btnClear');
   const urlLoading = document.getElementById('urlLoading');
   const urlHint = document.getElementById('urlHint');
+  const browserBridgePanel = document.getElementById('browserBridgePanel');
 
   const infoCard = document.getElementById('infoCard');
   const infoThumb = document.getElementById('infoThumb');
@@ -330,6 +345,109 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const toast = document.getElementById('toast');
   const toastMessage = document.getElementById('toastMessage');
+  let toastTimer = null;
+
+  async function refreshBrowserBridgeStatus() {
+    try {
+      const status = await GetBrowserBridgeStatus();
+      const badge = document.getElementById('bridgeSettingsBadge');
+      const path = document.getElementById('bridgeExtensionPath');
+      if (badge) {
+        badge.textContent = status?.installed ? 'Đã chuẩn bị' : 'Chưa cài';
+        badge.classList.toggle('ready', Boolean(status?.installed));
+      }
+      if (path) path.textContent = status?.extensionPath || '';
+      return status;
+    } catch (error) {
+      console.error(error);
+      return null;
+    }
+  }
+
+  async function installBrowserBridge() {
+    try {
+      const status = await InstallBrowserBridge();
+      await refreshBrowserBridgeStatus();
+      showToast('Đã chuẩn bị YouTube Assets Extension 2.1.1. Bấm Reload trong trang Extensions để cập nhật icon mới.', 'success', 9000);
+      try {
+        await OpenBrowserBridgeFolder();
+      } catch (openError) {
+        console.error(openError);
+      }
+      return status;
+    } catch (error) {
+      showToast(`Không thể chuẩn bị Assets Extension: ${error?.message || error}`, 'error', 8000);
+      return null;
+    }
+  }
+
+  document.getElementById('btnInstallBrowserBridgeSettings')?.addEventListener('click', installBrowserBridge);
+  document.getElementById('btnInstallBrowserBridge')?.addEventListener('click', installBrowserBridge);
+  document.getElementById('btnOpenBrowserBridgeFolder')?.addEventListener('click', async () => {
+    try {
+      const status = await GetBrowserBridgeStatus();
+      if (!status?.installed) {
+        await installBrowserBridge();
+        return;
+      }
+      await OpenBrowserBridgeFolder();
+      showToast('Đã mở thư mục extension trong Windows Explorer.', 'success');
+    } catch (error) {
+      showToast(`Không thể mở thư mục: ${error?.message || error}`, 'error', 7000);
+    }
+  });
+  document.getElementById('btnCopyBrowserBridgePath')?.addEventListener('click', async () => {
+    const status = await GetBrowserBridgeStatus();
+    if (!status?.extensionPath) return;
+    try {
+      await navigator.clipboard.writeText(status.extensionPath);
+      showToast('Đã sao chép đường dẫn thư mục extension.', 'success');
+    } catch (error) {
+      showToast(`Đường dẫn extension: ${status.extensionPath}`, 'error', 10000);
+    }
+  });
+  document.getElementById('btnSaveBrowserProxy')?.addEventListener('click', async () => {
+    const input = document.getElementById('browserProxyUrl');
+    currentSettings.browserProxyUrl = input?.value?.trim() || '';
+    await SaveSettings(currentSettings);
+    showToast(currentSettings.browserProxyUrl ? 'Đã lưu proxy riêng cho Browser Bridge.' : 'Đã tắt proxy riêng cho Browser Bridge.', 'success');
+  });
+  document.getElementById('btnTestBrowserProxy')?.addEventListener('click', async () => {
+    const input = document.getElementById('browserProxyUrl');
+    const proxyURL = input?.value?.trim() || '';
+    const button = document.getElementById('btnTestBrowserProxy');
+    button.disabled = true;
+    button.textContent = 'Đang kiểm tra…';
+    try {
+      const result = await TestBrowserBridgeProxy(proxyURL);
+      currentSettings.browserProxyUrl = proxyURL;
+      await SaveSettings(currentSettings);
+      showToast(result || 'Kết nối proxy thành công.', 'success', 6000);
+    } catch (error) {
+      showToast(error?.message || String(error), 'error', 8000);
+    } finally {
+      button.disabled = false;
+      button.textContent = 'Kiểm tra';
+    }
+  });
+
+  document.getElementById('btnReceiveBrowserBridge')?.addEventListener('click', async () => {
+    const url = urlInput.value.trim();
+    if (!url) return;
+    const button = document.getElementById('btnReceiveBrowserBridge');
+    button.disabled = true;
+    button.textContent = 'Đang nhận…';
+    try {
+      const capture = await GetBrowserBridgeCapture(url);
+      useBrowserBridgeCapture(capture);
+      showToast(`Đã nhận ${capture.streams?.length || 0} luồng từ trình duyệt.`, 'success');
+    } catch (error) {
+      showToast(error?.message || String(error), 'error', 8000);
+    } finally {
+      button.disabled = false;
+      button.textContent = 'Nhận luồng';
+    }
+  });
 
   // ═══ URL Input Handling ═══
   btnPaste?.addEventListener('click', async () => {
@@ -350,6 +468,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   btnClear?.addEventListener('click', () => {
     urlInput.value = '';
+    browserCapture = null;
     btnClear.classList.add('hidden');
     btnPaste.classList.remove('hidden');
     hideAllPanels();
@@ -358,6 +477,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   urlInput?.addEventListener('input', () => {
     const val = urlInput.value.trim();
+    browserCapture = null;
     btnClear.classList.toggle('hidden', !val);
     btnPaste.classList.toggle('hidden', !!val);
 
@@ -372,6 +492,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!url) return;
     urlLoading.classList.remove('hidden');
     hideAllPanels();
+    browserBridgePanel?.classList.add('hidden');
     setHint('Đang lấy thông tin video từ YouTube...');
 
     try {
@@ -390,6 +511,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       const info = await GetVideoInfo(url);
       videoInfo = info;
+      browserCapture = null;
+      document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('bridge-unavailable'));
 
       infoThumb.src = info.thumbnail || '';
       infoTitle.textContent = info.title || 'Video Title';
@@ -408,6 +531,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       downloadPanel.classList.remove('hidden');
       if (info._app_downloadable === false) {
         setHint(info._app_notice || 'Video hiện chưa có định dạng tải xuống.', 'error');
+        browserBridgePanel?.classList.remove('hidden');
       } else {
         setHint('Sẵn sàng tải xuống!', 'success');
       }
@@ -415,16 +539,55 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (err) {
       const errorMessage = String(err?.message || err || '');
       if (errorMessage.includes('YOUTUBE_BOT_CHECK')) {
-        const guidance = 'YouTube đang chặn yêu cầu tự động. Hãy đổi máy chủ VPN/IP hoặc chờ một lúc rồi thử lại.';
+        const guidance = 'YouTube đang chặn yêu cầu tự động. Hãy dùng Savior của Cốc Cốc cho video/MP3; Assets Extension dùng cho thumbnail, metadata và phụ đề.';
         setHint(guidance, 'error');
         showToast(guidance, 'error', 8000);
       } else {
         setHint(`Lỗi: ${errorMessage}`, 'error');
         showToast('Không thể lấy thông tin video', 'error');
       }
+      browserBridgePanel?.classList.remove('hidden');
     } finally {
       urlLoading.classList.add('hidden');
     }
+  }
+
+  function useBrowserBridgeCapture(capture) {
+    browserCapture = capture;
+    const videoID = capture.videoId || '';
+    const formats = (capture.streams || []).filter(stream => stream.hasVideo).map(stream => ({
+      height: stream.height || 0,
+      vcodec: 'browser',
+      acodec: stream.hasAudio ? 'browser' : 'none',
+      format_id: String(stream.itag || '')
+    }));
+    videoInfo = {
+      title: capture.title || 'YouTube Video',
+      channel: 'Browser Bridge',
+      thumbnail: videoID ? `https://i.ytimg.com/vi/${videoID}/hqdefault.jpg` : '',
+      duration: 0,
+      formats,
+      _app_downloadable: true,
+      _app_browser_bridge: true,
+      _app_bridge_capture_id: capture.id
+    };
+
+    infoThumb.src = videoInfo.thumbnail;
+    infoTitle.textContent = videoInfo.title;
+    infoChannelName.textContent = 'Browser Bridge';
+    infoViewCount.textContent = `${capture.streams?.length || 0} luồng đã bắt`;
+    infoDuration.textContent = 'Bridge';
+    markAvailableQualities(videoInfo);
+    infoCard.classList.remove('hidden');
+    downloadPanel.classList.remove('hidden');
+    browserBridgePanel?.classList.remove('hidden');
+
+    document.querySelectorAll('.tab').forEach(tab => {
+      const type = tab.getAttribute('data-tab');
+      tab.classList.toggle('bridge-unavailable', type !== 'video' && type !== 'audio');
+    });
+    document.querySelector('.tab[data-tab="video"]')?.click();
+    setHint('Đã nhận file media do trình duyệt tải qua VPN. Sẵn sàng ghép bằng FFmpeg.', 'success');
   }
 
   function renderSubtitles(info) {
@@ -556,6 +719,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const activeTab = document.querySelector('.tab-bar .tab.active')?.getAttribute('data-tab') || 'video';
 
+    if (videoInfo._app_browser_bridge && activeTab !== 'video' && activeTab !== 'audio') {
+      showToast('Browser Bridge hiện chỉ hỗ trợ tải video hoặc audio.', 'error');
+      return;
+    }
+
     if (videoInfo._app_downloadable === false && activeTab !== 'metadata') {
       showToast('Video hiện chỉ có metadata; chưa có định dạng có thể tải xuống.', 'error');
       return;
@@ -571,6 +739,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       title: videoInfo.title || 'Video YouTube',
       thumbnail: videoInfo.thumbnail || '',
       channel: videoInfo.channel || 'YouTube',
+      browserCaptureId: videoInfo._app_bridge_capture_id || '',
       bundleOpts: {
         video: document.getElementById('bundleChkVideo').checked,
         videoQual: 'best',
@@ -603,6 +772,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     } else {
       activeTasksMap.delete(task.id);
       renderCompletedHistory();
+      if (task.status === 'error') {
+        showToast(`Tải thất bại: ${task.error || 'Không thể xử lý luồng media'}`, 'error', 8000);
+      }
     }
 
     updateQueueBadges();
@@ -765,10 +937,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function showToast(msg, type = 'info', duration = 3500) {
+    if (toastTimer) clearTimeout(toastTimer);
     toastMessage.textContent = msg;
     toast.className = `toast ${type}`;
     toast.classList.remove('hidden');
-    setTimeout(() => toast.classList.add('hidden'), duration);
+    toastTimer = setTimeout(() => {
+      toast.classList.add('hidden');
+      toastTimer = null;
+    }, duration);
   }
 
   function setHint(text, type = '') {

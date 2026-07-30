@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"os"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -12,13 +13,18 @@ import (
 var assets embed.FS
 
 func main() {
+	if isBrowserNativeHostInvocation(os.Args[1:]) {
+		_ = runBrowserBridgeNativeHost(os.Stdin, os.Stdout)
+		return
+	}
+
 	app := NewApp()
 
 	err := wails.Run(&options.App{
-		Title:  "YT Downloader Pro",
-		Width:  1100,
-		Height: 750,
-		MinWidth: 900,
+		Title:     "YT Downloader Pro",
+		Width:     1100,
+		Height:    750,
+		MinWidth:  900,
 		MinHeight: 600,
 		Frameless: true,
 		AssetServer: &assetserver.Options{
