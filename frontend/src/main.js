@@ -406,11 +406,22 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       infoCard.classList.remove('hidden');
       downloadPanel.classList.remove('hidden');
-      setHint('Sẵn sàng tải xuống!', 'success');
+      if (info._app_downloadable === false) {
+        setHint(info._app_notice || 'Video hiện chưa có định dạng tải xuống.', 'error');
+      } else {
+        setHint('Sẵn sàng tải xuống!', 'success');
+      }
 
     } catch (err) {
-      setHint(`Lỗi: ${err.message || err}`, 'error');
-      showToast('Không thể lấy thông tin video', 'error');
+      const errorMessage = String(err?.message || err || '');
+      if (errorMessage.includes('YOUTUBE_BOT_CHECK')) {
+        const guidance = 'YouTube đang chặn yêu cầu tự động. Hãy đổi máy chủ VPN/IP hoặc chờ một lúc rồi thử lại.';
+        setHint(guidance, 'error');
+        showToast(guidance, 'error', 8000);
+      } else {
+        setHint(`Lỗi: ${errorMessage}`, 'error');
+        showToast('Không thể lấy thông tin video', 'error');
+      }
     } finally {
       urlLoading.classList.add('hidden');
     }
@@ -466,10 +477,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function markAvailableQualities(info) {
-    if (!info || !info.formats) return;
-
+    const formats = Array.isArray(info?.formats) ? info.formats : [];
+    const hasDownloadableFormats = formats.length > 0;
     const availableHeights = new Set(
-      info.formats.filter(f => f.height && f.vcodec !== 'none').map(f => f.height)
+      formats.filter(f => f.height && f.vcodec !== 'none').map(f => f.height)
     );
 
     let maxVideoHeight = 0;
@@ -484,8 +495,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       chip.textContent = label;
 
       if (val === 'best') {
-        chip.classList.remove('unavailable');
-        if (!firstAvailableVideoChip) firstAvailableVideoChip = chip;
+        chip.classList.toggle('unavailable', !hasDownloadableFormats);
+        if (hasDownloadableFormats && !firstAvailableVideoChip) firstAvailableVideoChip = chip;
         return;
       }
 
@@ -544,6 +555,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!url || !videoInfo) return;
 
     const activeTab = document.querySelector('.tab-bar .tab.active')?.getAttribute('data-tab') || 'video';
+
+    if (videoInfo._app_downloadable === false && activeTab !== 'metadata') {
+      showToast('Video hiện chỉ có metadata; chưa có định dạng có thể tải xuống.', 'error');
+      return;
+    }
 
     const opts = {
       url: url,
@@ -748,11 +764,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('btnSettingsText').textContent = isVi ? 'Cài đặt' : 'Settings';
   }
 
-  function showToast(msg, type = 'info') {
+  function showToast(msg, type = 'info', duration = 3500) {
     toastMessage.textContent = msg;
     toast.className = `toast ${type}`;
     toast.classList.remove('hidden');
-    setTimeout(() => toast.classList.add('hidden'), 3500);
+    setTimeout(() => toast.classList.add('hidden'), duration);
   }
 
   function setHint(text, type = '') {

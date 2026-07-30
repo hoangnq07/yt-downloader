@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -63,6 +64,10 @@ type DownloadOptions struct {
 	} `json:"bundleOpts"`
 }
 
+const (
+	youtubeBotCheckErrorCode = "YOUTUBE_BOT_CHECK"
+)
+
 func NewApp() *App {
 	return &App{
 		storage:       NewStorage(),
@@ -111,26 +116,33 @@ func (a *App) SetupBinaries() (BinaryStatus, error) {
 	return status, nil
 }
 
-// GetVideoInfo fetches video/playlist metadata using yt-dlp --dump-json
+// GetVideoInfo fetches video metadata. --ignore-no-formats-error is important
+// for newly published/processed or region-restricted videos: yt-dlp can still
+// return the useful metadata even when no downloadable formats are available.
 func (a *App) GetVideoInfo(url string) (map[string]interface{}, error) {
 	if err := a.binaryManager.CheckOrReport(); err != nil {
 		return nil, err
 	}
 
 	args := a.binaryManager.BuildArgs(
-		"--dump-json",
-		"--all-subs",
-		"--no-warnings",
+		"--dump-single-json",
+		"--skip-download",
+		"--ignore-no-formats-error",
 		"--no-playlist",
 		url,
 	)
 
-	cmd := exec.Command(a.binaryManager.GetYtdlpPath(), args...)
+	commandCtx, cancel := context.WithTimeout(a.appContext(), 60*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(commandCtx, a.binaryManager.GetYtdlpPath(), args...)
 	cmd.SysProcAttr = hiddenWindowAttr()
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 
 	output, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("không thể lấy thông tin video: %v", err)
+		return nil, videoInfoCommandError(stderr.String(), err, commandCtx.Err())
 	}
 
 	var result map[string]interface{}
@@ -138,7 +150,68 @@ func (a *App) GetVideoInfo(url string) (map[string]interface{}, error) {
 		return nil, fmt.Errorf("lỗi đọc JSON thông tin video: %v", err)
 	}
 
+	formats, hasFormats := result["formats"].([]interface{})
+	downloadable := hasFormats && len(formats) > 0
+	result["_app_downloadable"] = downloadable
+	if !downloadable {
+		result["_app_notice"] = videoInfoNoFormatsNotice(stderr.String())
+	}
+
 	return result, nil
+}
+
+func videoInfoNoFormatsNotice(stderr string) string {
+	lower := strings.ToLower(stderr)
+	switch {
+	case strings.Contains(lower, "not made this video available in your country"),
+		strings.Contains(lower, "geo-restricted"):
+		return "Đã lấy được metadata, nhưng video không khả dụng tại quốc gia/khu vực mà app đang kết nối. Hãy đổi máy chủ VPN rồi thử lại."
+	case strings.Contains(lower, "video unavailable"):
+		return "YouTube trả về “Video unavailable” cho app dù đã lấy được metadata. Hãy kiểm tra đúng URL này có phát hình và tiếng thực sự trong Firefox; nếu có, video hiện không khả dụng với client tải xuống của yt-dlp."
+	default:
+		return "Đã lấy được metadata, nhưng video chưa có định dạng tải xuống. Video có thể đang được YouTube xử lý hoặc chưa khả dụng với client tải xuống."
+	}
+}
+
+func videoInfoCommandError(stderr string, commandErr, contextErr error) error {
+	if contextErr != nil {
+		return fmt.Errorf("không thể lấy thông tin video: YouTube phản hồi quá lâu, vui lòng thử lại")
+	}
+
+	lower := strings.ToLower(stderr)
+	switch {
+	case strings.Contains(lower, "not made this video available in your country"),
+		strings.Contains(lower, "geo-restricted"):
+		return fmt.Errorf("không thể lấy thông tin video: video không khả dụng tại quốc gia/khu vực hiện tại; hãy dùng mạng hoặc VPN ở khu vực được YouTube cho phép")
+	case strings.Contains(lower, "private video"):
+		return fmt.Errorf("không thể lấy thông tin video: đây là video riêng tư")
+	case strings.Contains(lower, "sign in to confirm"),
+		strings.Contains(lower, "login required"):
+		return fmt.Errorf("%s: YouTube đang chặn yêu cầu tự động; hãy đổi máy chủ VPN hoặc thử lại sau", youtubeBotCheckErrorCode)
+	case strings.Contains(lower, "video unavailable"):
+		return fmt.Errorf("không thể lấy thông tin video: video không khả dụng hoặc đã bị gỡ")
+	case strings.Contains(lower, "no video formats found"):
+		return fmt.Errorf("không thể lấy thông tin video: video chưa có định dạng tải xuống; có thể vẫn đang được YouTube xử lý")
+	}
+
+	// Keep one concise yt-dlp error line instead of hiding the useful cause
+	// behind the generic "exit status 1" message.
+	lines := strings.Split(strings.ReplaceAll(stderr, "\r\n", "\n"), "\n")
+	for index := len(lines) - 1; index >= 0; index-- {
+		line := strings.TrimSpace(lines[index])
+		if line == "" || strings.EqualFold(line, "null") {
+			continue
+		}
+		if errorIndex := strings.Index(line, "ERROR:"); errorIndex >= 0 {
+			line = strings.TrimSpace(line[errorIndex+len("ERROR:"):])
+		}
+		if len(line) > 300 {
+			line = line[:300] + "..."
+		}
+		return fmt.Errorf("không thể lấy thông tin video: %s", line)
+	}
+
+	return fmt.Errorf("không thể lấy thông tin video: %v", commandErr)
 }
 
 // GetPlaylistInfo fetches playlist videos using yt-dlp --flat-playlist --dump-json
