@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "YT Downloader Pro Assets",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "description": "Tải thumbnail, metadata và phụ đề từ video YouTube đang mở.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwbka/9eeuDmS5tJhdXDupkJG1LzX5EjGmuMoILMujlXWkHJhb+zR0daI1TERdlEYX3Eux+feHBF1pcLlaR3uSRpxu4WOpnNuBriNLd61Y8msV/Hk57irxpawp49b+UamI+dby6UO5gV2EbWQrKIHLVpPxzFCYUo8HFRLDSA7n0xUVBL0Hb/87AuwsllXXhHyDLDdy6EDYhQlI3l7Tl5Qdtb1O2Skv1ilriHoNO9DF/0gp7C+1v0ZRPzCb8OL/RL43kNtwP82YAAvWAeu7fQNIsgSbtq+Q7V9zplGZ3qy+ooOWJhAPux1XgFAK+3mU2YPZQbL4gqVKAde8V7kt/A4EQIDAQAB",
   "permissions": [

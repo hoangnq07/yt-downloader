@@ -41,38 +41,100 @@ function extractYouTubePageData() {
     return document.querySelector(selector)?.getAttribute(attribute) || '';
   }
 
-  let playerResponse = window.ytInitialPlayerResponse || null;
-  if (!playerResponse) {
-    const rawPlayerResponse = window.ytplayer?.config?.args?.player_response;
-    if (typeof rawPlayerResponse === 'string') {
-      try {
-        playerResponse = JSON.parse(rawPlayerResponse);
-      } catch (_) {
-        playerResponse = null;
+  const currentURL = new URL(location.href);
+  const currentVideoId = currentURL.searchParams.get('v') || '';
+
+  function getPlayerResponse() {
+    // 1. YouTube official Movie Player API (always returns active video in SPA)
+    try {
+      const moviePlayer = document.getElementById('movie_player') || document.querySelector('.html5-video-player');
+      if (moviePlayer && typeof moviePlayer.getPlayerResponse === 'function') {
+        const pr = moviePlayer.getPlayerResponse();
+        if (pr?.videoDetails?.videoId && (!currentVideoId || pr.videoDetails.videoId === currentVideoId)) {
+          return pr;
+        }
       }
-    } else if (rawPlayerResponse && typeof rawPlayerResponse === 'object') {
-      playerResponse = rawPlayerResponse;
+    } catch (_) {}
+
+    // 2. Polymer / Web Component watch-flexy element
+    try {
+      const watchFlexy = document.querySelector('ytd-watch-flexy');
+      const flexyPr = watchFlexy?.playerData || watchFlexy?.data?.playerResponse;
+      if (flexyPr?.videoDetails?.videoId && (!currentVideoId || flexyPr.videoDetails.videoId === currentVideoId)) {
+        return flexyPr;
+      }
+    } catch (_) {}
+
+    // 3. Page Manager element data
+    try {
+      const pageManager = document.querySelector('ytd-page-manager');
+      if (pageManager && typeof pageManager.getCurrentData === 'function') {
+        const pmPr = pageManager.getCurrentData()?.playerResponse;
+        if (pmPr?.videoDetails?.videoId && (!currentVideoId || pmPr.videoDetails.videoId === currentVideoId)) {
+          return pmPr;
+        }
+      }
+    } catch (_) {}
+
+    // 4. Initial Player Response (only if videoId matches current URL to prevent SPA stale data)
+    if (window.ytInitialPlayerResponse?.videoDetails?.videoId) {
+      if (!currentVideoId || window.ytInitialPlayerResponse.videoDetails.videoId === currentVideoId) {
+        return window.ytInitialPlayerResponse;
+      }
     }
+
+    // 5. Config args
+    try {
+      const raw = window.ytplayer?.config?.args?.player_response;
+      let parsed = null;
+      if (typeof raw === 'string') parsed = JSON.parse(raw);
+      else if (raw && typeof raw === 'object') parsed = raw;
+      if (parsed?.videoDetails?.videoId && (!currentVideoId || parsed.videoDetails.videoId === currentVideoId)) {
+        return parsed;
+      }
+    } catch (_) {}
+
+    return null;
   }
 
+  const playerResponse = getPlayerResponse();
   const videoDetails = playerResponse?.videoDetails || {};
   const microformat = playerResponse?.microformat?.playerMicroformatRenderer || {};
   const captionRenderer = playerResponse?.captions?.playerCaptionsTracklistRenderer || {};
-  const currentURL = new URL(location.href);
-  const videoId = videoDetails.videoId || currentURL.searchParams.get('v') || '';
-  const title = videoDetails.title || readMeta('meta[property="og:title"]') || document.title.replace(/\s+-\s+YouTube$/, '');
-  const author = videoDetails.author || readMeta('link[itemprop="name"]', 'content') || readMeta('meta[itemprop="author"]');
+  const videoId = currentVideoId || videoDetails.videoId || '';
+
+  const domTitle = document.querySelector('h1.ytd-watch-metadata')?.textContent?.trim()
+    || document.querySelector('h1.title')?.textContent?.trim()
+    || readMeta('meta[property="og:title"]')
+    || document.title.replace(/\s+-\s+YouTube$/, '');
+
+  const domAuthor = document.querySelector('#owner #channel-name a')?.textContent?.trim()
+    || document.querySelector('ytd-channel-name a')?.textContent?.trim()
+    || readMeta('link[itemprop="name"]', 'content')
+    || readMeta('meta[itemprop="author"]');
+
+  const title = videoDetails.title || domTitle || 'YouTube Video';
+  const author = videoDetails.author || domAuthor || 'YouTube';
   const metaKeywords = readMeta('meta[name="keywords"]')
     .split(',')
     .map(value => value.trim())
     .filter(Boolean);
-  const thumbnails = Array.isArray(videoDetails.thumbnail?.thumbnails)
+
+  let thumbnails = Array.isArray(videoDetails.thumbnail?.thumbnails)
     ? videoDetails.thumbnail.thumbnails.map(item => ({
       url: item.url || '',
       width: Number(item.width) || 0,
       height: Number(item.height) || 0
     })).filter(item => item.url)
     : [];
+
+  if (thumbnails.length === 0 && videoId) {
+    thumbnails = [
+      { url: `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`, width: 1280, height: 720 },
+      { url: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`, width: 480, height: 360 }
+    ];
+  }
+
   const captionTracks = Array.isArray(captionRenderer.captionTracks)
     ? captionRenderer.captionTracks.map((track, index) => ({
       id: String(index),
@@ -203,16 +265,6 @@ function metadataAsText(data) {
     `Số track phụ đề     : ${(data.captionTracks || []).length}`,
     `Thumbnail tốt nhất  : ${bestThumbnail ? `${bestThumbnail.width}x${bestThumbnail.height} - ${bestThumbnail.url}` : ''}`,
     '',
-    'PHÂN TÍCH SEO THAM KHẢO',
-    shortLine,
-    `Điểm kiểm tra nhanh : ${score}/100`,
-    `Độ dài tiêu đề      : ${titleText.length} ký tự / ${titleWords.length} từ`,
-    `Độ dài mô tả        : ${normalizedDescription.length} ký tự / ${descriptionWords.length} từ`,
-    `Số keyword/tag      : ${keywords.length}`,
-    `Số hashtag          : ${hashtags.length}`,
-    `Số chapter          : ${chapters.length}`,
-    ...checks.map(check => `[${check.pass ? 'OK' : '--'}] ${check.label}`),
-    '',
     'TAGS / KEYWORDS',
     shortLine,
     keywords.length ? keywords.join(', ') : 'Không có tags/keywords công khai',
@@ -229,10 +281,6 @@ function metadataAsText(data) {
     'MÔ TẢ VIDEO',
     line,
     normalizedDescription || 'Không có mô tả',
-    '',
-    line,
-    `Trích xuất lúc: ${data.extractedAt || new Date().toISOString()}`,
-    line,
     ''
   ].join('\r\n');
 }

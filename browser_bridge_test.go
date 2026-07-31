@@ -39,8 +39,8 @@ func TestEmbeddedAssetsExtensionIdentityAndCapabilities(t *testing.T) {
 		t.Fatalf("extension ID = %s, want %s", extensionID, browserBridgeExtensionID)
 	}
 
-	if manifest.Version != "2.1.1" {
-		t.Fatalf("extension version = %s, want 2.1.1", manifest.Version)
+	if manifest.Version != "2.1.2" {
+		t.Fatalf("extension version = %s, want 2.1.2", manifest.Version)
 	}
 	permissions := strings.Join(manifest.Permissions, ",")
 	if !strings.Contains(permissions, "downloads") || !strings.Contains(permissions, "scripting") {

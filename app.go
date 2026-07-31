@@ -55,6 +55,7 @@ type DownloadOptions struct {
 	Thumbnail        string `json:"thumbnail"`
 	Channel          string `json:"channel"`
 	BrowserCaptureID string `json:"browserCaptureId,omitempty"`
+	IsPlaylist       bool   `json:"isPlaylist,omitempty"`
 	BundleOpts       struct {
 		Video     bool   `json:"video"`
 		VideoQual string `json:"videoQual"`
@@ -175,30 +176,59 @@ func videoInfoNoFormatsNotice(stderr string) string {
 	}
 }
 
-func videoInfoCommandError(stderr string, commandErr, contextErr error) error {
-	if contextErr != nil {
-		return fmt.Errorf("không thể lấy thông tin video: YouTube phản hồi quá lâu, vui lòng thử lại")
-	}
+var ansiRegexp = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
 
-	lower := strings.ToLower(stderr)
+func stripAnsi(str string) string {
+	return ansiRegexp.ReplaceAllString(str, "")
+}
+
+func parseYtdlpError(stderr string) string {
+	cleanStderr := stripAnsi(stderr)
+	lower := strings.ToLower(cleanStderr)
+
 	switch {
+	case strings.Contains(lower, "unable to download api page"),
+		strings.Contains(lower, "unable to download webpage"),
+		strings.Contains(lower, "unable to download video data"),
+		strings.Contains(lower, "unexpected_eof"),
+		strings.Contains(lower, "eof occurred in violation of protocol"),
+		strings.Contains(lower, "sslerror"),
+		strings.Contains(lower, "ssl:"),
+		strings.Contains(lower, "tls"),
+		strings.Contains(lower, "certificate_verify_failed"),
+		strings.Contains(lower, "connection refused"),
+		strings.Contains(lower, "connection reset"),
+		strings.Contains(lower, "network is unreachable"),
+		strings.Contains(lower, "getaddrinfo failed"),
+		strings.Contains(lower, "name or service not known"),
+		strings.Contains(lower, "winerror"),
+		strings.Contains(lower, "timed out"),
+		strings.Contains(lower, "timeout"),
+		strings.Contains(lower, "connection timed out"),
+		strings.Contains(lower, "read timed out"),
+		strings.Contains(lower, "remote end closed connection"),
+		strings.Contains(lower, "urlerror"):
+		return "không thể kết nối tới YouTube (lỗi mạng/SSL hoặc IP bị mạng/quốc gia chặn); hãy bật/đổi máy chủ VPN hoặc kiểm tra đường truyền mạng rồi thử lại"
+
 	case strings.Contains(lower, "not made this video available in your country"),
 		strings.Contains(lower, "geo-restricted"):
-		return fmt.Errorf("không thể lấy thông tin video: video không khả dụng tại quốc gia/khu vực hiện tại; hãy dùng mạng hoặc VPN ở khu vực được YouTube cho phép")
+		return "video không khả dụng tại quốc gia/khu vực hiện tại; hãy dùng mạng hoặc VPN ở khu vực được YouTube cho phép"
+
 	case strings.Contains(lower, "private video"):
-		return fmt.Errorf("không thể lấy thông tin video: đây là video riêng tư")
+		return "đây là video riêng tư"
+
 	case strings.Contains(lower, "sign in to confirm"),
 		strings.Contains(lower, "login required"):
-		return fmt.Errorf("%s: YouTube đang chặn yêu cầu tự động; hãy đổi máy chủ VPN hoặc thử lại sau", youtubeBotCheckErrorCode)
+		return fmt.Sprintf("%s: YouTube đang chặn yêu cầu tự động; hãy đổi máy chủ VPN hoặc thử lại sau", youtubeBotCheckErrorCode)
+
 	case strings.Contains(lower, "video unavailable"):
-		return fmt.Errorf("không thể lấy thông tin video: video không khả dụng hoặc đã bị gỡ")
+		return "video không khả dụng hoặc đã bị gỡ"
+
 	case strings.Contains(lower, "no video formats found"):
-		return fmt.Errorf("không thể lấy thông tin video: video chưa có định dạng tải xuống; có thể vẫn đang được YouTube xử lý")
+		return "video chưa có định dạng tải xuống; có thể vẫn đang được YouTube xử lý"
 	}
 
-	// Keep one concise yt-dlp error line instead of hiding the useful cause
-	// behind the generic "exit status 1" message.
-	lines := strings.Split(strings.ReplaceAll(stderr, "\r\n", "\n"), "\n")
+	lines := strings.Split(strings.ReplaceAll(cleanStderr, "\r\n", "\n"), "\n")
 	for index := len(lines) - 1; index >= 0; index-- {
 		line := strings.TrimSpace(lines[index])
 		if line == "" || strings.EqualFold(line, "null") {
@@ -210,7 +240,18 @@ func videoInfoCommandError(stderr string, commandErr, contextErr error) error {
 		if len(line) > 300 {
 			line = line[:300] + "..."
 		}
-		return fmt.Errorf("không thể lấy thông tin video: %s", line)
+		return line
+	}
+	return ""
+}
+
+func videoInfoCommandError(stderr string, commandErr, contextErr error) error {
+	if contextErr != nil {
+		return fmt.Errorf("không thể lấy thông tin video: YouTube phản hồi quá lâu, vui lòng thử lại")
+	}
+
+	if msg := parseYtdlpError(stderr); msg != "" {
+		return fmt.Errorf("không thể lấy thông tin video: %s", msg)
 	}
 
 	return fmt.Errorf("không thể lấy thông tin video: %v", commandErr)
@@ -335,6 +376,11 @@ func (a *App) executeTask(task *DownloadTask, opts DownloadOptions) {
 
 	outTemplate := filepath.Join(targetFolder, "%(title)s.%(ext)s")
 	args := []string{"--newline"}
+	if !opts.IsPlaylist {
+		args = append(args, "--no-playlist")
+	} else {
+		args = append(args, "--yes-playlist")
+	}
 
 	switch opts.Type {
 	case "video":
@@ -386,6 +432,7 @@ func (a *App) executeTask(task *DownloadTask, opts DownloadOptions) {
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		task.Status = "error"
+		task.Error = err.Error()
 		a.emitTaskUpdate(task)
 		return
 	}
@@ -397,6 +444,7 @@ func (a *App) executeTask(task *DownloadTask, opts DownloadOptions) {
 
 	if err := cmd.Start(); err != nil {
 		task.Status = "error"
+		task.Error = err.Error()
 		a.emitTaskUpdate(task)
 		return
 	}
@@ -405,11 +453,13 @@ func (a *App) executeTask(task *DownloadTask, opts DownloadOptions) {
 	speedRe := regexp.MustCompile(`at\s+([\d.]+\w+/s)`)
 	etaRe := regexp.MustCompile(`ETA\s+(\S+)`)
 
+	var outputLog strings.Builder
 	buf := make([]byte, 4096)
 	for {
 		n, err := stdout.Read(buf)
 		if n > 0 {
 			line := string(buf[:n])
+			outputLog.WriteString(line)
 			if m := pctRe.FindStringSubmatch(line); len(m) > 1 {
 				var p float64
 				fmt.Sscanf(m[1], "%f", &p)
@@ -437,6 +487,11 @@ func (a *App) executeTask(task *DownloadTask, opts DownloadOptions) {
 	if err != nil {
 		if task.Status != "cancelled" {
 			task.Status = "error"
+			if msg := parseYtdlpError(outputLog.String()); msg != "" {
+				task.Error = msg
+			} else {
+				task.Error = err.Error()
+			}
 		}
 		a.emitTaskUpdate(task)
 		return

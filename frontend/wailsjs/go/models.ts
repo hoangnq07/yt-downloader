@@ -6,11 +6,11 @@ export namespace main {
 	    downloadPath: string;
 	    autoOpenFolder: boolean;
 	    browserProxyUrl: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new AppSettings(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.language = source["language"];
@@ -27,11 +27,11 @@ export namespace main {
 	    ffmpegPath: string;
 	    ffprobePath: string;
 	    missing: string[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new BinaryStatus(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.ready = source["ready"];
@@ -54,11 +54,11 @@ export namespace main {
 	    contentLength: number;
 	    duration: number;
 	    localPath?: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new BrowserBridgeStream(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.url = source["url"];
@@ -81,11 +81,11 @@ export namespace main {
 	    title: string;
 	    capturedAt: string;
 	    streams: BrowserBridgeStream[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new BrowserBridgeCapture(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -95,7 +95,7 @@ export namespace main {
 	        this.capturedAt = source["capturedAt"];
 	        this.streams = this.convertValues(source["streams"], BrowserBridgeStream);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -119,11 +119,11 @@ export namespace main {
 	    extensionId: string;
 	    extensionPath: string;
 	    message: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new BrowserBridgeStatus(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.installed = source["installed"];
@@ -132,7 +132,7 @@ export namespace main {
 	        this.message = source["message"];
 	    }
 	}
-
+	
 	export class DownloadOptions {
 	    url: string;
 	    type: string;
@@ -145,6 +145,7 @@ export namespace main {
 	    thumbnail: string;
 	    channel: string;
 	    browserCaptureId?: string;
+	    isPlaylist?: boolean;
 	    // Go type: struct { Video bool "json:\"video\""; VideoQual string "json:\"videoQual\""; Audio bool "json:\"audio\""; AudioQual string "json:\"audioQual\""; Sub bool "json:\"sub\""; Thumb bool "json:\"thumb\""; Metadata bool "json:\"metadata\"" }
 	    bundleOpts: any;
 	
@@ -165,6 +166,7 @@ export namespace main {
 	        this.thumbnail = source["thumbnail"];
 	        this.channel = source["channel"];
 	        this.browserCaptureId = source["browserCaptureId"];
+	        this.isPlaylist = source["isPlaylist"];
 	        this.bundleOpts = this.convertValues(source["bundleOpts"], Object);
 	    }
 	
@@ -258,3 +260,4 @@ export namespace main {
 	}
 
 }
+

@@ -368,7 +368,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const status = await InstallBrowserBridge();
       await refreshBrowserBridgeStatus();
-      showToast('Đã chuẩn bị YouTube Assets Extension 2.1.1. Bấm Reload trong trang Extensions để cập nhật icon mới.', 'success', 9000);
+      showToast('Đã chuẩn bị YouTube Assets Extension 2.1.2. Bấm Reload trong trang Extensions để cập nhật.', 'success', 9000);
       try {
         await OpenBrowserBridgeFolder();
       } catch (openError) {

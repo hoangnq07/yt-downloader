@@ -66,3 +66,16 @@ func TestVideoInfoNoFormatsNoticeUsesYtdlpWarning(t *testing.T) {
 		t.Fatalf("geo restriction was not explained: %s", geoNotice)
 	}
 }
+
+func TestVideoInfoCommandErrorExplainsSSLError(t *testing.T) {
+	stderr := "ERROR: [youtube] MPxSRyMxluU: Unable to download API page: [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010) (caused by SSLError('[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)'))"
+	err := videoInfoCommandError(stderr, errors.New("exit status 1"), nil)
+
+	if !strings.Contains(err.Error(), "lỗi mạng/SSL hoặc IP bị mạng/quốc gia chặn") {
+		t.Fatalf("unexpected error format: %v", err)
+	}
+	if !strings.Contains(err.Error(), "VPN") {
+		t.Fatalf("VPN suggestion is missing: %v", err)
+	}
+}
+
