@@ -209,14 +209,35 @@ async function downloadText(filename, content, mimeType) {
   }
 }
 
+function normalizeChapterLine(line) {
+  const match = String(line || '').trim().match(/^\[?((?:\d{1,2}:)?\d{1,2}:\d{2})\]?\s*(?:[-\u2013\u2014]\s*)?(.*)$/);
+  if (!match) return '';
+
+  const timestampParts = match[1].split(':');
+  if (timestampParts.length === 3 && Number(timestampParts[0]) === 0) {
+    timestampParts.shift();
+  }
+  const timestamp = timestampParts
+    .map((part, index) => index === 0 && timestampParts.length === 3
+      ? String(Number(part))
+      : part.padStart(2, '0'))
+    .join(':');
+  const title = match[2].replace(/^\d+[.)]\s+/, '').trim();
+
+  return title ? `${timestamp} - ${title}` : '';
+}
+
 function metadataAsText(data) {
   const titleText = data.title || '';
-  const normalizedDescription = data.description || '';
+  const normalizedDescription = String(data.description || '')
+    .split(/\r?\n/)
+    .map(line => normalizeChapterLine(line) || line)
+    .join('\n');
   const hashtags = [...new Set(`${titleText}\n${normalizedDescription}`.match(/#[\p{L}\p{N}_-]+/gu) || [])];
   const keywords = [...new Set((data.keywords || []).map(value => String(value).trim()).filter(Boolean))];
   const chapters = normalizedDescription.split(/\r?\n/)
-    .map(line => line.trim())
-    .filter(line => /^(?:\d{1,2}:)?\d{1,2}:\d{2}\s+\S/.test(line));
+    .map(normalizeChapterLine)
+    .filter(Boolean);
   const titleWords = titleText.trim().split(/\s+/).filter(Boolean);
   const descriptionWords = normalizedDescription.trim().split(/\s+/).filter(Boolean);
   const duration = Math.max(0, Number(data.durationSeconds) || 0);

@@ -146,6 +146,7 @@ export namespace main {
 	    channel: string;
 	    browserCaptureId?: string;
 	    isPlaylist?: boolean;
+	    playlistItems?: string;
 	    // Go type: struct { Video bool "json:\"video\""; VideoQual string "json:\"videoQual\""; Audio bool "json:\"audio\""; AudioQual string "json:\"audioQual\""; Sub bool "json:\"sub\""; Thumb bool "json:\"thumb\""; Metadata bool "json:\"metadata\"" }
 	    bundleOpts: any;
 	
@@ -167,6 +168,7 @@ export namespace main {
 	        this.channel = source["channel"];
 	        this.browserCaptureId = source["browserCaptureId"];
 	        this.isPlaylist = source["isPlaylist"];
+	        this.playlistItems = source["playlistItems"];
 	        this.bundleOpts = this.convertValues(source["bundleOpts"], Object);
 	    }
 	
@@ -204,6 +206,9 @@ export namespace main {
 	    folderPath: string;
 	    date: string;
 	    error?: string;
+	    isPlaylist?: boolean;
+	    playlistCurrent?: number;
+	    playlistTotal?: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new DownloadTask(source);
@@ -226,6 +231,9 @@ export namespace main {
 	        this.folderPath = source["folderPath"];
 	        this.date = source["date"];
 	        this.error = source["error"];
+	        this.isPlaylist = source["isPlaylist"];
+	        this.playlistCurrent = source["playlistCurrent"];
+	        this.playlistTotal = source["playlistTotal"];
 	    }
 	}
 	export class HistoryItem {
@@ -239,6 +247,8 @@ export namespace main {
 	    quality: string;
 	    date: string;
 	    duration: string;
+	    isPlaylist?: boolean;
+	    playlistTotal?: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new HistoryItem(source);
@@ -256,6 +266,8 @@ export namespace main {
 	        this.quality = source["quality"];
 	        this.date = source["date"];
 	        this.duration = source["duration"];
+	        this.isPlaylist = source["isPlaylist"];
+	        this.playlistTotal = source["playlistTotal"];
 	    }
 	}
 

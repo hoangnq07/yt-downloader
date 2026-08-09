@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,21 +20,24 @@ import (
 )
 
 type DownloadTask struct {
-	ID         string  `json:"id"`
-	Title      string  `json:"title"`
-	Thumbnail  string  `json:"thumbnail"`
-	Channel    string  `json:"channel"`
-	Type       string  `json:"type"`
-	Format     string  `json:"format"`
-	Quality    string  `json:"quality"`
-	Status     string  `json:"status"` // "running", "completed", "error", "cancelled"
-	Percent    float64 `json:"percent"`
-	Speed      string  `json:"speed"`
-	ETA        string  `json:"eta"`
-	FilePath   string  `json:"filePath"`
-	FolderPath string  `json:"folderPath"`
-	Date       string  `json:"date"`
-	Error      string  `json:"error,omitempty"`
+	ID              string  `json:"id"`
+	Title           string  `json:"title"`
+	Thumbnail       string  `json:"thumbnail"`
+	Channel         string  `json:"channel"`
+	Type            string  `json:"type"`
+	Format          string  `json:"format"`
+	Quality         string  `json:"quality"`
+	Status          string  `json:"status"` // "running", "completed", "error", "cancelled"
+	Percent         float64 `json:"percent"`
+	Speed           string  `json:"speed"`
+	ETA             string  `json:"eta"`
+	FilePath        string  `json:"filePath"`
+	FolderPath      string  `json:"folderPath"`
+	Date            string  `json:"date"`
+	Error           string  `json:"error,omitempty"`
+	IsPlaylist      bool    `json:"isPlaylist,omitempty"`
+	PlaylistCurrent int     `json:"playlistCurrent,omitempty"`
+	PlaylistTotal   int     `json:"playlistTotal,omitempty"`
 }
 
 type App struct {
@@ -56,6 +62,7 @@ type DownloadOptions struct {
 	Channel          string `json:"channel"`
 	BrowserCaptureID string `json:"browserCaptureId,omitempty"`
 	IsPlaylist       bool   `json:"isPlaylist,omitempty"`
+	PlaylistItems    string `json:"playlistItems,omitempty"`
 	BundleOpts       struct {
 		Video     bool   `json:"video"`
 		VideoQual string `json:"videoQual"`
@@ -270,34 +277,116 @@ func (a *App) GetPlaylistInfo(url string) ([]map[string]interface{}, error) {
 		url,
 	)
 
-	cmd := exec.Command(a.binaryManager.GetYtdlpPath(), args...)
-	cmd.SysProcAttr = hiddenWindowAttr()
+	commandCtx, cancel := context.WithTimeout(a.appContext(), 2*time.Minute)
+	defer cancel()
 
-	stdout, err := cmd.StdoutPipe()
+	cmd := exec.CommandContext(commandCtx, a.binaryManager.GetYtdlpPath(), args...)
+	cmd.SysProcAttr = hiddenWindowAttr()
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	output, err := cmd.Output()
 	if err != nil {
-		return nil, err
-	}
-	if err := cmd.Start(); err != nil {
-		return nil, err
+		if commandCtx.Err() != nil {
+			return nil, errors.New("không thể đọc playlist: YouTube phản hồi quá lâu")
+		}
+		if detail := parseYtdlpError(stderr.String()); detail != "" {
+			return nil, fmt.Errorf("không thể đọc playlist: %s", detail)
+		}
+		return nil, fmt.Errorf("không thể đọc playlist: %w", err)
 	}
 
 	var items []map[string]interface{}
-	decoder := json.NewDecoder(stdout)
-	for decoder.More() {
+	decoder := json.NewDecoder(bytes.NewReader(output))
+	for {
 		var item map[string]interface{}
-		if err := decoder.Decode(&item); err == nil {
-			items = append(items, item)
+		if err := decoder.Decode(&item); err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return nil, fmt.Errorf("lỗi đọc dữ liệu playlist: %w", err)
 		}
+		items = append(items, item)
 	}
 
-	cmd.Wait()
 	return items, nil
+}
+
+var playlistItemsRegexp = regexp.MustCompile(`^[1-9]\d*(?:,[1-9]\d*)*$`)
+var invalidPathComponentRegexp = regexp.MustCompile(`[<>:"/\\|?*%\x00-\x1f]`)
+var playlistDownloadProgressRegexp = regexp.MustCompile(`(?i)Downloading (?:item|video) (\d+) of (\d+)`)
+
+func normalizePlaylistItems(value string) (string, error) {
+	value = strings.ReplaceAll(strings.TrimSpace(value), " ", "")
+	if value == "" {
+		return "", nil
+	}
+	if len(value) > 100000 || !playlistItemsRegexp.MatchString(value) {
+		return "", errors.New("danh sách bài hát đã chọn không hợp lệ")
+	}
+	return value, nil
+}
+
+func playlistItemCount(value string) int {
+	if value == "" {
+		return 0
+	}
+	return strings.Count(value, ",") + 1
+}
+
+func parsePlaylistDownloadProgress(line string) (current, total int, ok bool) {
+	match := playlistDownloadProgressRegexp.FindStringSubmatch(line)
+	if len(match) < 3 {
+		return 0, 0, false
+	}
+	if _, err := fmt.Sscanf(match[1], "%d", &current); err != nil {
+		return 0, 0, false
+	}
+	if _, err := fmt.Sscanf(match[2], "%d", &total); err != nil {
+		return 0, 0, false
+	}
+	return current, total, current > 0 && total > 0
+}
+
+func safePlaylistFolderName(title string) string {
+	name := invalidPathComponentRegexp.ReplaceAllString(strings.TrimSpace(title), "_")
+	name = strings.TrimRight(name, ". ")
+	if name == "" {
+		name = "YouTube Playlist"
+	}
+
+	runes := []rune(name)
+	if len(runes) > 120 {
+		name = strings.TrimRight(string(runes[:120]), ". ")
+	}
+
+	baseName := name
+	if dot := strings.IndexByte(baseName, '.'); dot >= 0 {
+		baseName = baseName[:dot]
+	}
+	reservedNames := map[string]bool{
+		"CON": true, "PRN": true, "AUX": true, "NUL": true,
+		"COM1": true, "COM2": true, "COM3": true, "COM4": true, "COM5": true,
+		"COM6": true, "COM7": true, "COM8": true, "COM9": true,
+		"LPT1": true, "LPT2": true, "LPT3": true, "LPT4": true, "LPT5": true,
+		"LPT6": true, "LPT7": true, "LPT8": true, "LPT9": true,
+	}
+	if reservedNames[strings.ToUpper(baseName)] {
+		name = "_" + name
+	}
+	return name
 }
 
 // StartDownloadTask starts an asynchronous non-blocking download task
 func (a *App) StartDownloadTask(opts DownloadOptions) (*DownloadTask, error) {
 	if err := a.binaryManager.CheckOrReport(); err != nil {
 		return nil, err
+	}
+	if opts.IsPlaylist {
+		playlistItems, err := normalizePlaylistItems(opts.PlaylistItems)
+		if err != nil {
+			return nil, err
+		}
+		opts.PlaylistItems = playlistItems
 	}
 
 	taskID := fmt.Sprintf("task_%d", time.Now().UnixNano())
@@ -306,27 +395,34 @@ func (a *App) StartDownloadTask(opts DownloadOptions) (*DownloadTask, error) {
 		settings := a.storage.LoadSettings()
 		targetFolder = settings.DownloadPath
 	}
-	os.MkdirAll(targetFolder, 0755)
 
 	taskTitle := opts.Title
 	if taskTitle == "" {
 		taskTitle = "Video YouTube"
 	}
+	if opts.IsPlaylist {
+		targetFolder = filepath.Join(targetFolder, safePlaylistFolderName(taskTitle))
+	}
+	if err := os.MkdirAll(targetFolder, 0755); err != nil {
+		return nil, fmt.Errorf("không thể tạo thư mục tải xuống: %w", err)
+	}
 
 	task := &DownloadTask{
-		ID:         taskID,
-		Title:      taskTitle,
-		Thumbnail:  opts.Thumbnail,
-		Channel:    opts.Channel,
-		Type:       opts.Type,
-		Format:     opts.Format,
-		Quality:    opts.Quality,
-		Status:     "running",
-		Percent:    0,
-		Speed:      "-- MB/s",
-		ETA:        "ETA: --",
-		FolderPath: targetFolder,
-		Date:       time.Now().Format("15:04"),
+		ID:            taskID,
+		Title:         taskTitle,
+		Thumbnail:     opts.Thumbnail,
+		Channel:       opts.Channel,
+		Type:          opts.Type,
+		Format:        opts.Format,
+		Quality:       opts.Quality,
+		Status:        "running",
+		Percent:       0,
+		Speed:         "-- MB/s",
+		ETA:           "ETA: --",
+		FolderPath:    targetFolder,
+		Date:          time.Now().Format("15:04"),
+		IsPlaylist:    opts.IsPlaylist,
+		PlaylistTotal: playlistItemCount(opts.PlaylistItems),
 	}
 
 	a.taskMu.Lock()
@@ -369,8 +465,8 @@ func (a *App) executeTask(task *DownloadTask, opts DownloadOptions) {
 
 		task.Percent = 100.0
 		task.Status = "completed"
-		a.emitTaskUpdate(task)
 		a.saveTaskToHistory(task)
+		a.emitTaskUpdate(task)
 		return
 	}
 
@@ -380,6 +476,10 @@ func (a *App) executeTask(task *DownloadTask, opts DownloadOptions) {
 		args = append(args, "--no-playlist")
 	} else {
 		args = append(args, "--yes-playlist")
+		outTemplate = filepath.Join(targetFolder, "%(title)s.%(ext)s")
+		if opts.PlaylistItems != "" {
+			args = append(args, "--playlist-items", opts.PlaylistItems)
+		}
 	}
 
 	switch opts.Type {
@@ -454,28 +554,30 @@ func (a *App) executeTask(task *DownloadTask, opts DownloadOptions) {
 	etaRe := regexp.MustCompile(`ETA\s+(\S+)`)
 
 	var outputLog strings.Builder
-	buf := make([]byte, 4096)
-	for {
-		n, err := stdout.Read(buf)
-		if n > 0 {
-			line := string(buf[:n])
-			outputLog.WriteString(line)
-			if m := pctRe.FindStringSubmatch(line); len(m) > 1 {
-				var p float64
-				fmt.Sscanf(m[1], "%f", &p)
-				task.Percent = p
-			}
-			if m := speedRe.FindStringSubmatch(line); len(m) > 1 {
-				task.Speed = m[1]
-			}
-			if m := etaRe.FindStringSubmatch(line); len(m) > 1 {
-				task.ETA = m[1]
-			}
-			a.emitTaskUpdate(task)
+	scanner := bufio.NewScanner(stdout)
+	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
+	for scanner.Scan() {
+		line := scanner.Text()
+		outputLog.WriteString(line)
+		outputLog.WriteByte('\n')
+		if m := pctRe.FindStringSubmatch(line); len(m) > 1 {
+			var p float64
+			fmt.Sscanf(m[1], "%f", &p)
+			task.Percent = p
 		}
-		if err != nil {
-			break
+		if m := speedRe.FindStringSubmatch(line); len(m) > 1 {
+			task.Speed = m[1]
 		}
+		if m := etaRe.FindStringSubmatch(line); len(m) > 1 {
+			task.ETA = m[1]
+		}
+		if current, total, ok := parsePlaylistDownloadProgress(line); ok {
+			task.PlaylistCurrent = current
+			if task.PlaylistTotal == 0 && total > 0 {
+				task.PlaylistTotal = total
+			}
+		}
+		a.emitTaskUpdate(task)
 	}
 
 	err = cmd.Wait()
@@ -498,18 +600,25 @@ func (a *App) executeTask(task *DownloadTask, opts DownloadOptions) {
 	}
 
 	// Bundle Metadata Generation
-	if opts.Type == "bundle" && opts.BundleOpts.Metadata {
+	if opts.Type == "bundle" && opts.BundleOpts.Metadata && !opts.IsPlaylist {
 		if info, infoErr := a.GetVideoInfo(opts.URL); infoErr == nil {
 			a.writeRichMetadataFile(targetFolder, info)
 		}
 	}
 
-	fileName := fmt.Sprintf("%s.%s", task.Title, task.Format)
-	task.FilePath = filepath.Join(targetFolder, fileName)
+	if opts.IsPlaylist {
+		task.FilePath = targetFolder
+	} else {
+		fileName := fmt.Sprintf("%s.%s", task.Title, task.Format)
+		task.FilePath = filepath.Join(targetFolder, fileName)
+	}
 	task.Percent = 100.0
 	task.Status = "completed"
-	a.emitTaskUpdate(task)
+	if task.IsPlaylist && task.PlaylistTotal > 0 {
+		task.PlaylistCurrent = task.PlaylistTotal
+	}
 	a.saveTaskToHistory(task)
+	a.emitTaskUpdate(task)
 }
 
 func (a *App) emitTaskUpdate(task *DownloadTask) {
@@ -517,19 +626,19 @@ func (a *App) emitTaskUpdate(task *DownloadTask) {
 }
 
 func (a *App) saveTaskToHistory(task *DownloadTask) {
-	history := a.storage.LoadHistory()
 	item := HistoryItem{
-		ID:        task.ID,
-		Title:     task.Title,
-		Channel:   task.Channel,
-		Thumbnail: task.Thumbnail,
-		FilePath:  task.FilePath,
-		Format:    task.Format,
-		Date:      task.Date,
-		Duration:  "",
+		ID:            task.ID,
+		Title:         task.Title,
+		Channel:       task.Channel,
+		Thumbnail:     task.Thumbnail,
+		FilePath:      task.FilePath,
+		Format:        task.Format,
+		Date:          task.Date,
+		Duration:      "",
+		IsPlaylist:    task.IsPlaylist,
+		PlaylistTotal: task.PlaylistTotal,
 	}
-	history = append([]HistoryItem{item}, history...)
-	a.storage.SaveHistory(history)
+	a.storage.AddHistory(item)
 }
 
 // CancelDownloadTask cancels a specific running task
@@ -671,6 +780,10 @@ func (a *App) OpenFolder(folderPath string) {
 	if folderPath == "" {
 		settings := a.storage.LoadSettings()
 		folderPath = settings.DownloadPath
+	} else if info, err := os.Stat(folderPath); err == nil && !info.IsDir() {
+		folderPath = filepath.Dir(folderPath)
+	} else if err != nil && filepath.Ext(folderPath) != "" {
+		folderPath = filepath.Dir(folderPath)
 	}
 	exec.Command("explorer", folderPath).Start()
 }

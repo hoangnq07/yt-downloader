@@ -39,8 +39,8 @@ func TestEmbeddedAssetsExtensionIdentityAndCapabilities(t *testing.T) {
 		t.Fatalf("extension ID = %s, want %s", extensionID, browserBridgeExtensionID)
 	}
 
-	if manifest.Version != "2.1.2" {
-		t.Fatalf("extension version = %s, want 2.1.2", manifest.Version)
+	if manifest.Version != "2.1.3" {
+		t.Fatalf("extension version = %s, want 2.1.3", manifest.Version)
 	}
 	permissions := strings.Join(manifest.Permissions, ",")
 	if !strings.Contains(permissions, "downloads") || !strings.Contains(permissions, "scripting") {
@@ -59,6 +59,9 @@ func TestEmbeddedAssetsExtensionIdentityAndCapabilities(t *testing.T) {
 	}
 	if !bytes.Contains(popup, []byte("YOUTUBE SEO METADATA REPORT")) {
 		t.Fatal("popup does not provide the TXT SEO metadata report")
+	}
+	if !bytes.Contains(popup, []byte("normalizeChapterLine")) || !bytes.Contains(popup, []byte("normalizeChapterLine(line) || line")) || !bytes.Contains(popup, []byte(".map(normalizeChapterLine)")) {
+		t.Fatal("popup does not normalize playlist timestamps in the TXT SEO metadata report")
 	}
 	if bytes.Contains(popup, []byte(browserBridgeHostName)) {
 		t.Fatal("assets extension should not depend on the native video bridge")

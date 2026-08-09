@@ -11,7 +11,7 @@ Phiên bản chính sử dụng Wails v2, Go và Vite.
 - Tải video, audio, phụ đề, thumbnail hoặc một bundle tùy chọn.
 - Xuất báo cáo metadata/SEO dạng TXT.
 - Quản lý lịch sử tải xuống và cài đặt ứng dụng.
-- Hỗ trợ playlist, nhiều giao diện màu và tiếng Việt/English.
+- Hỗ trợ playlist YouTube và YouTube Music, chọn từng bài để tải, nhiều giao diện màu và tiếng Việt/English.
 - YouTube Assets Extension cho Cốc Cốc/Chrome: tải thumbnail, metadata và phụ đề trực tiếp từ tab video.
 
 ## YouTube Assets Extension

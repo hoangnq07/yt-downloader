@@ -29,6 +29,7 @@ import {
 } from '../wailsjs/runtime/runtime';
 
 document.addEventListener('DOMContentLoaded', async () => {
+  const DEFAULT_PLAYLIST_THUMBNAIL = '/playlist-default.svg';
   // ═══ Titlebar Window Controls ═══
   document.getElementById('btnMinimize')?.addEventListener('click', () => WindowMinimise());
   document.getElementById('btnMaximize')?.addEventListener('click', () => WindowToggleMaximise());
@@ -147,6 +148,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // ═══ State Management ═══
   let videoInfo = null;
   let browserCapture = null;
+  let currentPlaylist = null;
   let currentTab = 'video';
   let activeTasksMap = new Map();
 
@@ -160,7 +162,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const selections = {
     video: { quality: 'best', format: 'mp4' },
-    audio: { quality: 'best', format: 'mp3' },
+    audio: { quality: '0', format: 'mp3' },
     subtitle: { lang: '', format: 'srt' },
     thumbnail: { quality: 'maxresdefault', format: 'jpg' },
     metadata: { format: 'txt' }
@@ -368,7 +370,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const status = await InstallBrowserBridge();
       await refreshBrowserBridgeStatus();
-      showToast('Đã chuẩn bị YouTube Assets Extension 2.1.2. Bấm Reload trong trang Extensions để cập nhật.', 'success', 9000);
+      showToast('Đã chuẩn bị YouTube Assets Extension 2.1.3. Bấm Reload trong trang Extensions để cập nhật.', 'success', 9000);
       try {
         await OpenBrowserBridgeFolder();
       } catch (openError) {
@@ -469,6 +471,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   btnClear?.addEventListener('click', () => {
     urlInput.value = '';
     browserCapture = null;
+    currentPlaylist = null;
+    videoInfo = null;
     btnClear.classList.add('hidden');
     btnPaste.classList.remove('hidden');
     hideAllPanels();
@@ -494,15 +498,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     hideAllPanels();
     browserBridgePanel?.classList.add('hidden');
     setHint('Đang lấy thông tin video từ YouTube...');
+    currentPlaylist = null;
+    videoInfo = null;
 
     try {
-      if (url.includes('/playlist?') || (url.includes('list=PL') && !url.includes('watch?v='))) {
+      const playlistDetails = getPlaylistURLDetails(url);
+      if (playlistDetails) {
         const items = await GetPlaylistInfo(url);
         if (items && items.length > 0) {
-          renderPlaylist(items);
+          const fallbackTitle = playlistDetails.isMusic ? 'YouTube Music Playlist' : 'YouTube Playlist';
+          const title = items[0]?.playlist_title || items[0]?.playlist || fallbackTitle;
+          currentPlaylist = { items, isMusic: playlistDetails.isMusic, title };
+          videoInfo = {
+            title,
+            channel: items[0]?.playlist_uploader || items[0]?.uploader || (playlistDetails.isMusic ? 'YouTube Music' : 'YouTube'),
+            thumbnail: DEFAULT_PLAYLIST_THUMBNAIL,
+            _app_downloadable: true,
+            _app_playlist: true
+          };
+          document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('bridge-unavailable'));
+          renderPlaylist(items, currentPlaylist);
           playlistCard.classList.remove('hidden');
           downloadPanel.classList.remove('hidden');
-          setHint(`Đã tải danh sách Playlist (${items.length} video)!`, 'success');
+          if (playlistDetails.isMusic) {
+            document.querySelector('.tab[data-tab="audio"]')?.click();
+          }
+          setHint(`Đã đọc playlist ${playlistDetails.isMusic ? 'YouTube Music' : 'YouTube'} (${items.length} bài)!`, 'success');
         } else {
           setHint('Không thể đọc dữ liệu Playlist.', 'error');
         }
@@ -684,20 +705,39 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  function renderPlaylist(items) {
-    playlistTitle.textContent = 'YouTube Playlist';
-    playlistCountBadge.textContent = `${items.length} video`;
+  function getPlaylistURLDetails(rawURL) {
+    try {
+      const parsed = new URL(rawURL);
+      const host = parsed.hostname.toLowerCase();
+      const isYouTube = host === 'youtube.com' || host.endsWith('.youtube.com');
+      const playlistID = parsed.searchParams.get('list');
+      if (!isYouTube || !playlistID) return null;
+
+      const isMusic = host === 'music.youtube.com';
+      const isPlaylistPath = parsed.pathname.replace(/\/+$/, '') === '/playlist';
+      const isStandaloneList = !parsed.searchParams.get('v');
+      return isMusic || isPlaylistPath || isStandaloneList ? { isMusic, playlistID } : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function renderPlaylist(items, playlist) {
+    playlistTitle.textContent = playlist?.title || (playlist?.isMusic ? 'YouTube Music Playlist' : 'YouTube Playlist');
+    playlistCountBadge.textContent = `${items.length} bài`;
     playlistItemsList.innerHTML = '';
 
     items.forEach((item, idx) => {
+      const playlistIndex = Number.isInteger(Number(item.playlist_index)) && Number(item.playlist_index) > 0
+        ? Number(item.playlist_index)
+        : idx + 1;
       const div = document.createElement('div');
       div.className = 'playlist-item';
       div.innerHTML = `
         <label class="custom-checkbox">
-          <input type="checkbox" class="chk-playlist-item" data-idx="${idx}" checked>
+          <input type="checkbox" class="chk-playlist-item" data-playlist-index="${playlistIndex}" checked>
           <span class="checkmark"></span>
         </label>
-        <span class="p-num" style="font-size: 12px; color: #71717A; width: 24px;">${idx + 1}</span>
         <div class="p-info" style="flex: 1;">
           <p style="font-size: 13px; font-weight: 600; color: #fff;">${escapeHtml(item.title || 'Untitled')}</p>
           <p style="font-size: 11px; color: #71717A;">${escapeHtml(item.uploader || item.channel || 'YouTube')}</p>
@@ -718,6 +758,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!url || !videoInfo) return;
 
     const activeTab = document.querySelector('.tab-bar .tab.active')?.getAttribute('data-tab') || 'video';
+    const isPlaylist = Boolean(videoInfo._app_playlist && currentPlaylist);
+
+    if (isPlaylist && activeTab === 'metadata') {
+      showToast('Metadata TXT hiện chỉ hỗ trợ từng video, chưa hỗ trợ toàn bộ playlist.', 'error');
+      return;
+    }
+
+    let playlistItems = '';
+    if (isPlaylist) {
+      const selectedItems = [...document.querySelectorAll('.chk-playlist-item:checked')]
+        .map(checkbox => Number(checkbox.dataset.playlistIndex))
+        .filter(index => Number.isInteger(index) && index > 0);
+      if (!selectedItems.length) {
+        showToast('Hãy chọn ít nhất một bài trong playlist.', 'error');
+        return;
+      }
+      playlistItems = selectedItems.join(',');
+    }
 
     if (videoInfo._app_browser_bridge && activeTab !== 'video' && activeTab !== 'audio') {
       showToast('Browser Bridge hiện chỉ hỗ trợ tải video hoặc audio.', 'error');
@@ -740,6 +798,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       thumbnail: videoInfo.thumbnail || '',
       channel: videoInfo.channel || 'YouTube',
       browserCaptureId: videoInfo._app_bridge_capture_id || '',
+      isPlaylist,
+      playlistItems,
       bundleOpts: {
         video: document.getElementById('bundleChkVideo').checked,
         videoQual: 'best',
@@ -826,7 +886,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         <div class="task-info-group">
           <div class="task-title" title="${escapeHtml(t.title)}">${escapeHtml(t.title)}</div>
           <div class="task-meta-row">
-            <span>${t.type.toUpperCase()} (${t.format.toUpperCase()}) • ${t.speed || '-- MB/s'}</span>
+            <span>${t.type.toUpperCase()} (${t.format.toUpperCase()})${t.isPlaylist && Number(t.playlistTotal) > 0
+              ? ` • ${Number(t.playlistCurrent) > 0 ? `Bài ${t.playlistCurrent}/${t.playlistTotal}` : `${t.playlistTotal} bài`}`
+              : ''} • ${t.speed || '-- MB/s'}</span>
             <span>${t.percent.toFixed(1)}% | ${t.eta || 'ETA: --'}</span>
           </div>
           <div class="task-progress-track">
@@ -864,17 +926,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       listEl.innerHTML = history.map((item, idx) => `
         <div class="task-card" style="margin-bottom: 8px;">
-          <img class="task-thumb" src="${item.thumbnail || ''}" alt="">
+          <img class="task-thumb" src="${escapeHtml(item.thumbnail || (item.isPlaylist ? DEFAULT_PLAYLIST_THUMBNAIL : ''))}" alt="">
           <div class="task-info-group">
             <div class="task-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
             <div class="task-meta-row">
-              <span>${escapeHtml(item.channel || 'YouTube')} • ${item.date}</span>
+              <span>${escapeHtml(item.channel || 'YouTube')}${item.isPlaylist && Number(item.playlistTotal) > 0 ? ` • ${item.playlistTotal} bài` : ''} • ${item.date}</span>
               <span style="color: #10B981; font-weight: 700;">✔ Hoàn tất</span>
             </div>
           </div>
           <div style="display: flex; gap: 6px;">
-            <button class="done-btn done-btn-primary" data-act="openFile" data-path="${escapeHtml(item.filePath)}">Mở file</button>
-            <button class="done-btn" data-act="openFolder" data-path="${escapeHtml(item.filePath)}">Mở thư mục</button>
+            ${item.isPlaylist
+              ? `<button class="done-btn done-btn-primary" data-act="openFolder" data-path="${escapeHtml(item.filePath)}">Mở thư mục playlist</button>`
+              : `<button class="done-btn done-btn-primary" data-act="openFile" data-path="${escapeHtml(item.filePath)}">Mở file</button>
+                 <button class="done-btn" data-act="openFolder" data-path="${escapeHtml(item.filePath)}">Mở thư mục</button>`}
             <button class="done-btn" data-act="copyPath" data-path="${escapeHtml(item.filePath)}">Copy</button>
             <button class="done-btn" data-act="remove" data-idx="${idx}">✕</button>
           </div>
@@ -888,7 +952,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           const idx = parseInt(btn.getAttribute('data-idx'));
 
           if (act === 'openFile' && path) OpenFile(path);
-          else if (act === 'openFolder') OpenFolder(currentSettings.downloadPath);
+          else if (act === 'openFolder') OpenFolder(path || currentSettings.downloadPath);
           else if (act === 'copyPath' && path) {
             navigator.clipboard.writeText(path);
             showToast('Đã sao chép đường dẫn file!', 'success');
@@ -973,6 +1037,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function escapeHtml(str) {
-    return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return String(str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 });

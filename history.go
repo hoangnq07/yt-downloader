@@ -8,16 +8,18 @@ import (
 )
 
 type HistoryItem struct {
-	ID        string `json:"id"`
-	Title     string `json:"title"`
-	Channel   string `json:"channel"`
-	Thumbnail string `json:"thumbnail"`
-	FilePath  string `json:"filePath"`
-	FileName  string `json:"fileName"`
-	Format    string `json:"format"`
-	Quality   string `json:"quality"`
-	Date      string `json:"date"`
-	Duration  string `json:"duration"`
+	ID            string `json:"id"`
+	Title         string `json:"title"`
+	Channel       string `json:"channel"`
+	Thumbnail     string `json:"thumbnail"`
+	FilePath      string `json:"filePath"`
+	FileName      string `json:"fileName"`
+	Format        string `json:"format"`
+	Quality       string `json:"quality"`
+	Date          string `json:"date"`
+	Duration      string `json:"duration"`
+	IsPlaylist    bool   `json:"isPlaylist,omitempty"`
+	PlaylistTotal int    `json:"playlistTotal,omitempty"`
 }
 
 type AppSettings struct {
@@ -70,6 +72,22 @@ func (s *Storage) SaveHistory(items []HistoryItem) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	data, err := json.MarshalIndent(items, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(s.historyFile, data, 0644)
+}
+
+func (s *Storage) AddHistory(item HistoryItem) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var items []HistoryItem
+	if data, err := os.ReadFile(s.historyFile); err == nil {
+		_ = json.Unmarshal(data, &items)
+	}
+	items = append([]HistoryItem{item}, items...)
 	data, err := json.MarshalIndent(items, "", "  ")
 	if err != nil {
 		return err
