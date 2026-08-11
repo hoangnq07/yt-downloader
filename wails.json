@@ -10,5 +10,12 @@
   "author": {
     "name": "Hoang",
     "email": "hoang@example.com"
+  },
+  "info": {
+    "companyName": "YT Downloader Pro",
+    "productName": "YT Downloader Pro",
+    "productVersion": "1.0.3",
+    "copyright": "Copyright 2026 Hoang",
+    "comments": "YouTube downloader with playlist history support"
   }
 }

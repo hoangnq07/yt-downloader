@@ -314,6 +314,7 @@ func (a *App) GetPlaylistInfo(url string) ([]map[string]interface{}, error) {
 var playlistItemsRegexp = regexp.MustCompile(`^[1-9]\d*(?:,[1-9]\d*)*$`)
 var invalidPathComponentRegexp = regexp.MustCompile(`[<>:"/\\|?*%\x00-\x1f]`)
 var playlistDownloadProgressRegexp = regexp.MustCompile(`(?i)Downloading (?:item|video) (\d+) of (\d+)`)
+var outputExtensionRegexp = regexp.MustCompile(`^[a-z0-9]+$`)
 
 func normalizePlaylistItems(value string) (string, error) {
 	value = strings.ReplaceAll(strings.TrimSpace(value), " ", "")
@@ -331,6 +332,104 @@ func playlistItemCount(value string) int {
 		return 0
 	}
 	return strings.Count(value, ",") + 1
+}
+
+func playlistDownloadArgs(isPlaylist bool, playlistItems string) []string {
+	if !isPlaylist {
+		return []string{"--no-playlist"}
+	}
+
+	// YouTube Music playlists commonly contain unavailable or region-blocked
+	// tracks. Continue the batch and let yt-dlp report the overall run as
+	// successful when the remaining selected tracks were downloaded.
+	args := []string{"--yes-playlist", "--ignore-errors"}
+	if playlistItems != "" {
+		args = append(args, "--playlist-items", playlistItems)
+	}
+	return args
+}
+
+func playlistOutputExtension(opts DownloadOptions) string {
+	switch opts.Type {
+	case "audio", "video", "subtitle", "thumbnail":
+		return safeOutputExtension(opts.Format)
+	}
+	return ""
+}
+
+func safeOutputExtension(format string) string {
+	format = strings.TrimPrefix(strings.ToLower(strings.TrimSpace(format)), ".")
+	if format != "" && outputExtensionRegexp.MatchString(format) {
+		return "." + format
+	}
+	return ""
+}
+
+func completedPlaylistOutputCount(folder, extension string) int {
+	if extension == "" {
+		return 0
+	}
+	entries, err := os.ReadDir(folder)
+	if err != nil {
+		return 0
+	}
+	count := 0
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.EqualFold(filepath.Ext(entry.Name()), extension) {
+			continue
+		}
+		if info, infoErr := entry.Info(); infoErr == nil && info.Size() > 0 {
+			count++
+		}
+	}
+	return count
+}
+
+func removeCompletedPlaylistPartFiles(folder, finalExtension string) int {
+	if finalExtension == "" {
+		return 0
+	}
+	entries, err := os.ReadDir(folder)
+	if err != nil {
+		return 0
+	}
+	removed := 0
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(strings.ToLower(name), ".part") {
+			continue
+		}
+		sourceName := strings.TrimSuffix(name, filepath.Ext(name))
+		stem := strings.TrimSuffix(sourceName, filepath.Ext(sourceName))
+		finalPath := filepath.Join(folder, stem+finalExtension)
+		if info, statErr := os.Stat(finalPath); statErr != nil || !info.Mode().IsRegular() || info.Size() == 0 {
+			continue
+		}
+		if os.Remove(filepath.Join(folder, name)) == nil {
+			removed++
+		}
+	}
+	return removed
+}
+
+func reconcilePlaylistTaskAfterCommandError(task *DownloadTask, opts DownloadOptions) {
+	if !task.IsPlaylist || task.PlaylistTotal <= 0 {
+		return
+	}
+	extension := playlistOutputExtension(opts)
+	completed := completedPlaylistOutputCount(task.FolderPath, extension)
+	if completed > task.PlaylistTotal {
+		completed = task.PlaylistTotal
+	}
+	task.PlaylistCurrent = completed
+	if completed >= task.PlaylistTotal {
+		removeCompletedPlaylistPartFiles(task.FolderPath, extension)
+		task.Percent = 100
+		task.Status = "completed"
+		task.Error = ""
+	} else if completed > 0 {
+		task.Status = "partial"
+	}
 }
 
 func parsePlaylistDownloadProgress(line string) (current, total int, ok bool) {
@@ -424,6 +523,12 @@ func (a *App) StartDownloadTask(opts DownloadOptions) (*DownloadTask, error) {
 		IsPlaylist:    opts.IsPlaylist,
 		PlaylistTotal: playlistItemCount(opts.PlaylistItems),
 	}
+	if task.IsPlaylist {
+		task.FilePath = targetFolder
+		if err := a.saveTaskToHistory(task); err != nil {
+			return nil, fmt.Errorf("không thể khởi tạo lịch sử playlist: %w", err)
+		}
+	}
 
 	a.taskMu.Lock()
 	a.activeTasks[taskID] = task
@@ -465,21 +570,18 @@ func (a *App) executeTask(task *DownloadTask, opts DownloadOptions) {
 
 		task.Percent = 100.0
 		task.Status = "completed"
-		a.saveTaskToHistory(task)
+		if err := a.saveTaskToHistory(task); err != nil {
+			task.Error = fmt.Sprintf("đã tải xong nhưng không thể lưu lịch sử: %v", err)
+		}
 		a.emitTaskUpdate(task)
 		return
 	}
 
 	outTemplate := filepath.Join(targetFolder, "%(title)s.%(ext)s")
 	args := []string{"--newline"}
-	if !opts.IsPlaylist {
-		args = append(args, "--no-playlist")
-	} else {
-		args = append(args, "--yes-playlist")
+	args = append(args, playlistDownloadArgs(opts.IsPlaylist, opts.PlaylistItems)...)
+	if opts.IsPlaylist {
 		outTemplate = filepath.Join(targetFolder, "%(title)s.%(ext)s")
-		if opts.PlaylistItems != "" {
-			args = append(args, "--playlist-items", opts.PlaylistItems)
-		}
 	}
 
 	switch opts.Type {
@@ -533,6 +635,7 @@ func (a *App) executeTask(task *DownloadTask, opts DownloadOptions) {
 	if err != nil {
 		task.Status = "error"
 		task.Error = err.Error()
+		a.persistPlaylistTaskState(task)
 		a.emitTaskUpdate(task)
 		return
 	}
@@ -545,6 +648,7 @@ func (a *App) executeTask(task *DownloadTask, opts DownloadOptions) {
 	if err := cmd.Start(); err != nil {
 		task.Status = "error"
 		task.Error = err.Error()
+		a.persistPlaylistTaskState(task)
 		a.emitTaskUpdate(task)
 		return
 	}
@@ -595,6 +699,8 @@ func (a *App) executeTask(task *DownloadTask, opts DownloadOptions) {
 				task.Error = err.Error()
 			}
 		}
+		reconcilePlaylistTaskAfterCommandError(task, opts)
+		a.persistPlaylistTaskState(task)
 		a.emitTaskUpdate(task)
 		return
 	}
@@ -617,7 +723,9 @@ func (a *App) executeTask(task *DownloadTask, opts DownloadOptions) {
 	if task.IsPlaylist && task.PlaylistTotal > 0 {
 		task.PlaylistCurrent = task.PlaylistTotal
 	}
-	a.saveTaskToHistory(task)
+	if err := a.saveTaskToHistory(task); err != nil {
+		task.Error = fmt.Sprintf("đã tải xong nhưng không thể lưu lịch sử: %v", err)
+	}
 	a.emitTaskUpdate(task)
 }
 
@@ -625,7 +733,7 @@ func (a *App) emitTaskUpdate(task *DownloadTask) {
 	runtime.EventsEmit(a.ctx, "task-updated", task)
 }
 
-func (a *App) saveTaskToHistory(task *DownloadTask) {
+func (a *App) saveTaskToHistory(task *DownloadTask) error {
 	item := HistoryItem{
 		ID:            task.ID,
 		Title:         task.Title,
@@ -637,8 +745,29 @@ func (a *App) saveTaskToHistory(task *DownloadTask) {
 		Duration:      "",
 		IsPlaylist:    task.IsPlaylist,
 		PlaylistTotal: task.PlaylistTotal,
+		PlaylistDone:  task.PlaylistCurrent,
+		Status:        task.Status,
+		Error:         task.Error,
 	}
-	a.storage.AddHistory(item)
+	if err := a.storage.UpsertHistory(item); err != nil {
+		return err
+	}
+	if a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "history-updated", item)
+	}
+	return nil
+}
+
+func (a *App) persistPlaylistTaskState(task *DownloadTask) {
+	if !task.IsPlaylist {
+		return
+	}
+	if err := a.saveTaskToHistory(task); err != nil {
+		if task.Error != "" {
+			task.Error += "; "
+		}
+		task.Error += fmt.Sprintf("không thể cập nhật lịch sử: %v", err)
+	}
 }
 
 // CancelDownloadTask cancels a specific running task
@@ -651,6 +780,7 @@ func (a *App) CancelDownloadTask(taskID string) bool {
 		delete(a.activeCmds, taskID)
 		if task, tExists := a.activeTasks[taskID]; tExists {
 			task.Status = "cancelled"
+			a.persistPlaylistTaskState(task)
 			a.emitTaskUpdate(task)
 		}
 		return true
@@ -794,7 +924,7 @@ func (a *App) OpenFile(filePath string) {
 
 // Storage IPC Methods
 func (a *App) GetHistory() []HistoryItem {
-	return a.storage.LoadHistory()
+	return a.storage.LoadAndReconcileHistory()
 }
 
 func (a *App) SaveHistory(items []HistoryItem) bool {

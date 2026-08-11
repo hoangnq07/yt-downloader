@@ -124,7 +124,9 @@ func (a *App) executeBrowserBridgeTask(task *DownloadTask, opts DownloadOptions)
 	task.Speed = "Hoàn tất"
 	task.ETA = "ETA: 00:00"
 	task.Status = "completed"
-	a.saveTaskToHistory(task)
+	if err := a.saveTaskToHistory(task); err != nil {
+		task.Error = fmt.Sprintf("đã tải xong nhưng không thể lưu lịch sử: %v", err)
+	}
 	a.emitTaskUpdate(task)
 	removeBrowserCaptureFiles(capture)
 	_ = os.Remove(filepath.Join(browserCaptureDir(), capture.ID+".json"))

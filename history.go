@@ -20,6 +20,9 @@ type HistoryItem struct {
 	Duration      string `json:"duration"`
 	IsPlaylist    bool   `json:"isPlaylist,omitempty"`
 	PlaylistTotal int    `json:"playlistTotal,omitempty"`
+	PlaylistDone  int    `json:"playlistDone,omitempty"`
+	Status        string `json:"status,omitempty"`
+	Error         string `json:"error,omitempty"`
 }
 
 type AppSettings struct {
@@ -68,6 +71,53 @@ func (s *Storage) LoadHistory() []HistoryItem {
 	return items
 }
 
+func (s *Storage) LoadAndReconcileHistory() []HistoryItem {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	data, err := os.ReadFile(s.historyFile)
+	if err != nil {
+		return []HistoryItem{}
+	}
+	var items []HistoryItem
+	if json.Unmarshal(data, &items) != nil {
+		return []HistoryItem{}
+	}
+
+	changed := false
+	for index := range items {
+		item := &items[index]
+		if !item.IsPlaylist || item.PlaylistTotal <= 0 || (item.Status != "error" && item.Status != "partial") {
+			continue
+		}
+		extension := safeOutputExtension(item.Format)
+		completed := completedPlaylistOutputCount(item.FilePath, extension)
+		if completed > item.PlaylistTotal {
+			completed = item.PlaylistTotal
+		}
+		if item.PlaylistDone != completed {
+			item.PlaylistDone = completed
+			changed = true
+		}
+		if completed >= item.PlaylistTotal {
+			removeCompletedPlaylistPartFiles(item.FilePath, extension)
+			item.Status = "completed"
+			item.Error = ""
+			changed = true
+		} else if completed > 0 && item.Status != "partial" {
+			item.Status = "partial"
+			changed = true
+		}
+	}
+
+	if changed {
+		if updated, marshalErr := json.MarshalIndent(items, "", "  "); marshalErr == nil {
+			_ = os.WriteFile(s.historyFile, updated, 0644)
+		}
+	}
+	return items
+}
+
 func (s *Storage) SaveHistory(items []HistoryItem) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -89,6 +139,30 @@ func (s *Storage) AddHistory(item HistoryItem) error {
 	}
 	items = append([]HistoryItem{item}, items...)
 	data, err := json.MarshalIndent(items, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(s.historyFile, data, 0644)
+}
+
+func (s *Storage) UpsertHistory(item HistoryItem) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var items []HistoryItem
+	if data, err := os.ReadFile(s.historyFile); err == nil {
+		_ = json.Unmarshal(data, &items)
+	}
+
+	updated := make([]HistoryItem, 0, len(items)+1)
+	updated = append(updated, item)
+	for _, existing := range items {
+		if existing.ID != item.ID {
+			updated = append(updated, existing)
+		}
+	}
+
+	data, err := json.MarshalIndent(updated, "", "  ")
 	if err != nil {
 		return err
 	}

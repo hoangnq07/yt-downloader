@@ -2,6 +2,8 @@ package main
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -135,6 +137,43 @@ func TestPlaylistItemCount(t *testing.T) {
 	}
 	if actual := playlistItemCount("1,2,5,12"); actual != 4 {
 		t.Fatalf("playlistItemCount(selected) = %d, want 4", actual)
+	}
+}
+
+func TestPlaylistDownloadArgsIgnoreIndividualTrackErrors(t *testing.T) {
+	args := playlistDownloadArgs(true, "1,3,5")
+	want := []string{"--yes-playlist", "--ignore-errors", "--playlist-items", "1,3,5"}
+	if strings.Join(args, "|") != strings.Join(want, "|") {
+		t.Fatalf("playlistDownloadArgs() = %v, want %v", args, want)
+	}
+
+	singleVideoArgs := playlistDownloadArgs(false, "")
+	if len(singleVideoArgs) != 1 || singleVideoArgs[0] != "--no-playlist" {
+		t.Fatalf("single video args = %v, want [--no-playlist]", singleVideoArgs)
+	}
+}
+
+func TestReconcilePlaylistCompletesAndRemovesRedundantPart(t *testing.T) {
+	folder := t.TempDir()
+	for _, name := range []string{"First.mp3", "Second.mp3", "Second.webm.part"} {
+		if err := os.WriteFile(filepath.Join(folder, name), []byte("media"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	task := &DownloadTask{
+		IsPlaylist:    true,
+		PlaylistTotal: 2,
+		FolderPath:    folder,
+		Status:        "error",
+		Error:         "network error",
+	}
+	reconcilePlaylistTaskAfterCommandError(task, DownloadOptions{Type: "audio", Format: "mp3"})
+
+	if task.Status != "completed" || task.PlaylistCurrent != 2 || task.Error != "" {
+		t.Fatalf("playlist was not reconciled as completed: %+v", task)
+	}
+	if _, err := os.Stat(filepath.Join(folder, "Second.webm.part")); !os.IsNotExist(err) {
+		t.Fatalf("redundant part file was not removed, stat error: %v", err)
 	}
 }
 

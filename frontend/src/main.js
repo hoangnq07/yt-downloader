@@ -151,6 +151,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let currentPlaylist = null;
   let currentTab = 'video';
   let activeTasksMap = new Map();
+  let historyRenderSequence = 0;
 
   let currentSettings = {
     language: 'vi',
@@ -831,14 +832,22 @@ document.addEventListener('DOMContentLoaded', async () => {
       activeTasksMap.set(task.id, task);
     } else {
       activeTasksMap.delete(task.id);
-      renderCompletedHistory();
       if (task.status === 'error') {
         showToast(`Tải thất bại: ${task.error || 'Không thể xử lý luồng media'}`, 'error', 8000);
+      } else if (task.status === 'partial') {
+        showToast(`Playlist tải được ${task.playlistCurrent || 0}/${task.playlistTotal || 0} bài.`, 'error', 8000);
+      } else if (task.status === 'completed' && task.error) {
+        showToast(task.error, 'error', 8000);
       }
     }
 
     updateQueueBadges();
     renderActiveQueue();
+  });
+
+  // This event is emitted only after the backend has persisted history.json.
+  EventsOn('history-updated', () => {
+    renderCompletedHistory();
   });
 
   async function loadInitialActiveTasks() {
@@ -917,21 +926,35 @@ document.addEventListener('DOMContentLoaded', async () => {
     const listEl = document.getElementById('managerHistoryList');
     if (!listEl) return;
 
+    const renderSequence = ++historyRenderSequence;
+
     try {
       const history = await GetHistory();
+      if (renderSequence !== historyRenderSequence) return;
       if (!history || history.length === 0) {
         listEl.innerHTML = '<p class="history-empty">Chưa có lịch sử tải xuống nào</p>';
         return;
       }
 
-      listEl.innerHTML = history.map((item, idx) => `
-        <div class="task-card" style="margin-bottom: 8px;">
+      listEl.innerHTML = history.map((item, idx) => {
+        const status = item.status || 'completed';
+        const statusView = status === 'running'
+          ? { label: '⏳ Đang tải', color: '#F59E0B' }
+          : status === 'error'
+            ? { label: '⚠ Chưa hoàn tất', color: '#EF4444' }
+            : status === 'partial'
+              ? { label: `⚠ Một phần (${Number(item.playlistDone) || 0}/${Number(item.playlistTotal) || 0})`, color: '#F59E0B' }
+            : status === 'cancelled'
+              ? { label: 'Đã hủy', color: '#A1A1AA' }
+              : { label: '✔ Hoàn tất', color: '#10B981' };
+        return `
+        <div class="task-card" style="margin-bottom: 8px;"${item.error ? ` title="${escapeHtml(item.error)}"` : ''}>
           <img class="task-thumb" src="${escapeHtml(item.thumbnail || (item.isPlaylist ? DEFAULT_PLAYLIST_THUMBNAIL : ''))}" alt="">
           <div class="task-info-group">
             <div class="task-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
             <div class="task-meta-row">
               <span>${escapeHtml(item.channel || 'YouTube')}${item.isPlaylist && Number(item.playlistTotal) > 0 ? ` • ${item.playlistTotal} bài` : ''} • ${item.date}</span>
-              <span style="color: #10B981; font-weight: 700;">✔ Hoàn tất</span>
+              <span style="color: ${statusView.color}; font-weight: 700;">${statusView.label}</span>
             </div>
           </div>
           <div style="display: flex; gap: 6px;">
@@ -943,7 +966,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             <button class="done-btn" data-act="remove" data-idx="${idx}">✕</button>
           </div>
         </div>
-      `).join('');
+      `;
+      }).join('');
 
       listEl.querySelectorAll('[data-act]').forEach(btn => {
         btn.addEventListener('click', async () => {
@@ -965,7 +989,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
       });
     } catch (e) {
-      console.error(e);
+      if (renderSequence === historyRenderSequence) console.error(e);
     }
   }
 

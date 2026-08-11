@@ -249,6 +249,9 @@ export namespace main {
 	    duration: string;
 	    isPlaylist?: boolean;
 	    playlistTotal?: number;
+	    playlistDone?: number;
+	    status?: string;
+	    error?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new HistoryItem(source);
@@ -268,6 +271,9 @@ export namespace main {
 	        this.duration = source["duration"];
 	        this.isPlaylist = source["isPlaylist"];
 	        this.playlistTotal = source["playlistTotal"];
+	        this.playlistDone = source["playlistDone"];
+	        this.status = source["status"];
+	        this.error = source["error"];
 	    }
 	}
 
