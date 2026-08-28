@@ -174,6 +174,64 @@ select:disabled {
   margin-top: 8px;
 }
 
+.direct-card {
+  border-color: rgba(34, 197, 94, .55);
+  background: linear-gradient(145deg, rgba(34, 197, 94, .11), #18181b 55%);
+}
+
+.badge-direct {
+  color: #4ade80 !important;
+  font-weight: 600;
+}
+
+.control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.control-label {
+  font-size: 10px;
+  color: #a1a1aa;
+  font-weight: 500;
+}
+
+.btn-primary {
+  background: #10b981;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #059669;
+}
+
+.bridge-card {
+  border-color: rgba(239, 35, 60, .55);
+  background: linear-gradient(145deg, rgba(239, 35, 60, .11), #18181b 55%);
+}
+
+.bridge-note {
+  margin-top: 8px;
+  color: #a1a1aa;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.transfer-progress {
+  height: 5px;
+  margin-top: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #27272a;
+}
+
+.transfer-progress > div {
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: #ef233c;
+  transition: width .2s ease;
+}
+
 #subtitleFormat {
   flex: 0 0 90px;
 }

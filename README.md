@@ -12,24 +12,31 @@ Phiên bản chính sử dụng Wails v2, Go và Vite.
 - Xuất báo cáo metadata/SEO dạng TXT.
 - Quản lý lịch sử tải xuống và cài đặt ứng dụng.
 - Hỗ trợ playlist YouTube và YouTube Music, chọn từng bài để tải, nhiều giao diện màu và tiếng Việt/English.
-- YouTube Assets Extension cho Cốc Cốc/Chrome: tải thumbnail, metadata và phụ đề trực tiếp từ tab video.
+- YouTube Bridge Extension cho Cốc Cốc/Chrome: gửi video/audio bằng kết nối của trình duyệt sang app, đồng thời tải thumbnail, metadata và phụ đề.
 
-## YouTube Assets Extension
+## YouTube Bridge Extension
 
-Extension hoạt động độc lập với app sau khi được nạp vào Cốc Cốc/Chrome. Video và MP3 được tải bằng
-Savior của Cốc Cốc; extension tập trung vào các asset nhẹ và ổn định hơn:
+Extension dùng chính kết nối, VPN và phiên YouTube của tab đang mở để tải media, sau đó truyền file cục bộ
+qua Native Messaging cho app ghép bằng FFmpeg. Nếu player trong trang không cung cấp URL trực tiếp,
+extension dùng `youtubei.js` (YouTube.js) làm fallback để lấy và giải mã định dạng:
 
+- Video và audio gửi sang app, hỗ trợ chọn giới hạn chất lượng.
 - Thumbnail JPG với nhiều mức chất lượng.
 - Báo cáo metadata/SEO dạng TXT: tiêu đề, mô tả, tag/keyword, hashtag, chapter và các chỉ số SEO tham khảo.
 - Phụ đề chính thức và tự động dạng SRT, VTT hoặc JSON.
 
-1. Mở **Cài đặt > YouTube Assets Extension** trong ứng dụng và bấm **Chuẩn bị Assets Extension**.
+1. Mở **Cài đặt > YouTube Bridge Extension** trong ứng dụng và bấm **Chuẩn bị Bridge Extension**. App sẽ chuẩn bị extension và đăng ký Native Messaging host cho Chrome/Cốc Cốc/Edge.
 2. Mở `coccoc://extensions` hoặc `chrome://extensions`.
 3. Bật chế độ dành cho nhà phát triển, chọn **Tải tiện ích đã giải nén** và chọn thư mục app vừa mở.
-4. Mở video YouTube rồi bấm extension **YT Downloader Pro Assets**.
-5. Chọn thumbnail, metadata hoặc track phụ đề cần tải.
+4. Mở video YouTube rồi bấm extension **YT Downloader Pro Bridge**.
+5. Chọn **Video MP4** hoặc **Audio → MP3**, chọn chất lượng video nếu cần và bấm gửi sang app. Có thể đóng popup trong lúc service worker tiếp tục truyền media.
+6. Quay lại app, bấm **Nhận media**, sau đó chọn tải video hoặc audio như bình thường.
+7. Thumbnail, metadata và phụ đề vẫn có thể tải trực tiếp trong popup extension.
 
-Nếu đã nạp Browser Bridge cũ, bấm **Tải lại/Reload** tại trang Extensions sau khi app chuẩn bị lại thư mục.
+Nếu đã nạp extension cũ, bấm **Tải lại/Reload** tại trang Extensions sau khi app chuẩn bị lại thư mục.
+
+YouTube.js giúp thay đổi InnerTube client và xử lý URL stream, nhưng không đổi địa chỉ IP. Nếu chính tab trình duyệt
+cũng bị YouTube chặn theo quốc gia hoặc IP VPN, người dùng vẫn cần đổi sang máy chủ/IP được YouTube cho phép.
 
 Chỉ tải nội dung bạn sở hữu hoặc được phép tải.
 

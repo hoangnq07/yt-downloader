@@ -1,3 +1,5 @@
+import { ClientType, Innertube, Platform } from 'youtubei.js/web';
+
 const titleElement = document.getElementById('videoTitle');
 const channelElement = document.getElementById('videoChannel');
 const thumbElement = document.getElementById('videoThumb');
@@ -9,8 +11,64 @@ const subtitleTrack = document.getElementById('subtitleTrack');
 const subtitleFormat = document.getElementById('subtitleFormat');
 const subtitleButton = document.getElementById('downloadSubtitle');
 const subtitleCount = document.getElementById('subtitleCount');
+const mediaQuality = document.getElementById('mediaQuality');
+const mediaButton = document.getElementById('sendMediaToApp');
+const mediaStreamCount = document.getElementById('mediaStreamCount');
+const transferProgress = document.getElementById('transferProgress');
+const transferProgressBar = document.getElementById('transferProgressBar');
+const mediaType = document.getElementById('mediaType');
+const directVideoQuality = document.getElementById('directVideoQuality');
+const btnDirectVideo = document.getElementById('btnDirectVideo');
+const directAudioFormat = document.getElementById('directAudioFormat');
+const btnDirectAudio = document.getElementById('btnDirectAudio');
+const sandboxFrame = document.getElementById('youtubeJsSandbox');
 
 let pageData = null;
+let innertubePromise = null;
+let transferPollTimer = null;
+
+const sandboxPending = new Map();
+let sandboxSequence = 0;
+const sandboxReady = new Promise(resolve => {
+  if (!sandboxFrame) {
+    resolve();
+    return;
+  }
+  sandboxFrame.addEventListener('load', resolve, { once: true });
+  setTimeout(resolve, 500);
+});
+
+window.addEventListener('message', event => {
+  const message = event.data;
+  if (event.source !== sandboxFrame?.contentWindow || message?.type !== 'yt-downloader-evaluate-result') return;
+  const pending = sandboxPending.get(message.id);
+  if (!pending) return;
+  sandboxPending.delete(message.id);
+  if (message.error) pending.reject(new Error(message.error));
+  else pending.resolve(message.result);
+});
+
+Platform.shim.eval = async (data, env) => {
+  await sandboxReady;
+  const id = `eval-${Date.now()}-${sandboxSequence += 1}`;
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      sandboxPending.delete(id);
+      reject(new Error('Bộ giải mã YouTube.js phản hồi quá lâu.'));
+    }, 15000);
+    sandboxPending.set(id, {
+      resolve: value => {
+        clearTimeout(timeout);
+        resolve(value);
+      },
+      reject: error => {
+        clearTimeout(timeout);
+        reject(error);
+      }
+    });
+    sandboxFrame?.contentWindow?.postMessage({ type: 'yt-downloader-evaluate', id, data, env }, '*');
+  });
+};
 
 function getActiveTab() {
   return new Promise(resolve => {
@@ -101,6 +159,7 @@ function extractYouTubePageData() {
   const videoDetails = playerResponse?.videoDetails || {};
   const microformat = playerResponse?.microformat?.playerMicroformatRenderer || {};
   const captionRenderer = playerResponse?.captions?.playerCaptionsTracklistRenderer || {};
+  const streamingData = playerResponse?.streamingData || {};
   const videoId = currentVideoId || videoDetails.videoId || '';
 
   const domTitle = document.querySelector('h1.ytd-watch-metadata')?.textContent?.trim()
@@ -148,6 +207,38 @@ function extractYouTubePageData() {
     })).filter(track => track.baseUrl)
     : [];
 
+  const mediaStreams = [
+    ...(Array.isArray(streamingData.formats) ? streamingData.formats : []),
+    ...(Array.isArray(streamingData.adaptiveFormats) ? streamingData.adaptiveFormats : [])
+  ].map(format => {
+    const mimeType = String(format.mimeType || '');
+    const baseMimeType = mimeType.split(';')[0].trim().toLowerCase();
+    let container = '';
+    if (baseMimeType.endsWith('/mp4')) container = baseMimeType.startsWith('audio/') ? 'm4a' : 'mp4';
+    else if (baseMimeType.endsWith('/webm')) container = 'webm';
+    else if (baseMimeType.endsWith('/opus')) container = 'opus';
+    return {
+      url: typeof format.url === 'string' ? format.url : '',
+      itag: Number(format.itag) || 0,
+      mimeType,
+      container,
+      hasVideo: baseMimeType.startsWith('video/') || Boolean(format.qualityLabel),
+      hasAudio: baseMimeType.startsWith('audio/') || Boolean(format.audioQuality),
+      height: Number(format.height) || 0,
+      bitrate: Number(format.bitrate || format.averageBitrate) || 0,
+      contentLength: Number(format.contentLength) || 0,
+      duration: (Number(format.approxDurationMs) || Number(videoDetails.lengthSeconds) * 1000 || 0) / 1000
+    };
+  }).filter(stream => {
+    if (!stream.url || (!stream.hasVideo && !stream.hasAudio)) return false;
+    try {
+      const hostname = new URL(stream.url).hostname.toLowerCase();
+      return hostname === 'googlevideo.com' || hostname.endsWith('.googlevideo.com');
+    } catch (_) {
+      return false;
+    }
+  });
+
   return {
     pageUrl: location.href,
     videoId,
@@ -169,8 +260,187 @@ function extractYouTubePageData() {
     availableCountries: Array.isArray(microformat.availableCountries) ? microformat.availableCountries : [],
     thumbnails,
     captionTracks,
+    mediaStreams,
+    playabilityStatus: playerResponse?.playabilityStatus?.status || '',
+    playabilityReason: playerResponse?.playabilityStatus?.reason || '',
     extractedAt: new Date().toISOString()
   };
+}
+
+function sendRuntimeMessage(message) {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage(message, response => {
+      const error = chrome.runtime.lastError;
+      if (error) reject(new Error(error.message));
+      else resolve(response);
+    });
+  });
+}
+
+function streamKey(stream) {
+  return `${stream.itag || 0}|${stream.url || ''}`;
+}
+
+function uniqueStreams(streams) {
+  const seen = new Set();
+  return streams.filter(stream => {
+    const key = streamKey(stream);
+    if (!stream.url || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function selectMediaStreams(streams, requestedQuality, requestedType = 'video') {
+  const audios = streams.filter(stream => stream.hasAudio && !stream.hasVideo).sort((left, right) => {
+    const leftM4a = left.container === 'm4a' ? 1 : 0;
+    const rightM4a = right.container === 'm4a' ? 1 : 0;
+    if (rightM4a !== leftM4a) return rightM4a - leftM4a;
+    return (right.bitrate || 0) - (left.bitrate || 0);
+  });
+  if (requestedType === 'audio') {
+    if (audios[0]) return [audios[0]];
+    const progressiveAudio = streams.filter(stream => stream.hasAudio).sort((left, right) => (right.bitrate || 0) - (left.bitrate || 0));
+    // A progressive MP4 is still a valid audio source for FFmpeg. Mark the
+    // transfer as audio-only so the app opens its MP3 conversion tab instead
+    // of treating this fallback as a video capture.
+    return progressiveAudio[0] ? [{ ...progressiveAudio[0], hasVideo: false }] : [];
+  }
+
+  const desiredHeight = requestedQuality === 'best' ? 0 : Number(requestedQuality) || 0;
+  let videos = streams.filter(stream => stream.hasVideo && (!desiredHeight || !stream.height || stream.height <= desiredHeight));
+  if (!videos.length && desiredHeight) videos = streams.filter(stream => stream.hasVideo);
+  videos.sort((left, right) => {
+    if ((right.height || 0) !== (left.height || 0)) return (right.height || 0) - (left.height || 0);
+    const leftMp4 = left.container === 'mp4' ? 1 : 0;
+    const rightMp4 = right.container === 'mp4' ? 1 : 0;
+    if (rightMp4 !== leftMp4) return rightMp4 - leftMp4;
+    return (right.bitrate || 0) - (left.bitrate || 0);
+  });
+
+  const video = videos[0] || null;
+  if (video?.hasAudio) return [video];
+
+  if (video && audios[0]) return [video, audios[0]];
+  if (video) return [video];
+  if (audios[0]) return [audios[0]];
+  return [];
+}
+
+function normalizeYouTubeJsFormat(format, url) {
+  const mimeType = String(format.mime_type || '');
+  const baseMimeType = mimeType.split(';')[0].trim().toLowerCase();
+  let container = '';
+  if (baseMimeType.endsWith('/mp4')) container = baseMimeType.startsWith('audio/') ? 'm4a' : 'mp4';
+  else if (baseMimeType.endsWith('/webm')) container = 'webm';
+  else if (baseMimeType.endsWith('/opus')) container = 'opus';
+  return {
+    url,
+    itag: Number(format.itag) || 0,
+    mimeType,
+    container,
+    hasVideo: Boolean(format.has_video),
+    hasAudio: Boolean(format.has_audio),
+    height: Number(format.height) || 0,
+    bitrate: Number(format.bitrate || format.average_bitrate) || 0,
+    contentLength: Number(format.content_length) || 0,
+    duration: (Number(format.approx_duration_ms) || 0) / 1000
+  };
+}
+
+async function getInnertube() {
+  if (!innertubePromise) {
+    innertubePromise = Innertube.create({
+      lang: 'vi',
+      client_type: ClientType.WEB,
+      generate_session_locally: true,
+      enable_session_cache: true,
+      fetch: (input, init = {}) => fetch(input, { ...init, credentials: 'include' })
+    }).catch(error => {
+      innertubePromise = null;
+      throw error;
+    });
+  }
+  return innertubePromise;
+}
+
+async function getYouTubeJsStreams(videoId, requestedQuality, requestedType) {
+  setStatus('Đang dùng YouTube.js để giải mã luồng dự phòng…', 'running');
+  const youtube = await getInnertube();
+  let lastError = null;
+
+  for (const client of ['TV', 'ANDROID', 'WEB']) {
+    try {
+      const info = await youtube.getBasicInfo(videoId, { client });
+      const formats = [
+        ...(info.streaming_data?.formats || []),
+        ...(info.streaming_data?.adaptive_formats || [])
+      ];
+      const candidates = formats.map(format => normalizeYouTubeJsFormat(format, format.url || format.signature_cipher || format.cipher || ''));
+      const selectedCandidates = selectMediaStreams(candidates, requestedQuality, requestedType);
+      const selected = [];
+      for (const candidate of selectedCandidates) {
+        const format = formats.find(item => Number(item.itag) === candidate.itag && (item.url || item.signature_cipher || item.cipher));
+        if (!format) continue;
+        const url = await format.decipher(youtube.session.player);
+        const normalized = normalizeYouTubeJsFormat(format, url);
+        const hostname = new URL(normalized.url).hostname.toLowerCase();
+        if (hostname === 'googlevideo.com' || hostname.endsWith('.googlevideo.com')) selected.push(normalized);
+      }
+      if (selected.length) return selected;
+      lastError = new Error(info.playability_status?.reason || `Client ${client} không trả về luồng tải.`);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error('YouTube.js không tìm được luồng tải phù hợp.');
+}
+
+function renderTransferStatus(transfer) {
+  if (!transfer || transfer.state === 'idle') return;
+  transferProgress.hidden = transfer.state !== 'running';
+  transferProgressBar.style.width = `${Math.max(0, Math.min(100, Number(transfer.percent) || 0))}%`;
+  if (transfer.state === 'running') {
+    mediaButton.disabled = true;
+    mediaButton.textContent = transfer.percent > 0 ? `${Math.round(transfer.percent)}%` : 'Đang gửi…';
+    setStatus(transfer.message || 'Đang gửi media sang app…', 'running');
+  } else if (transfer.state === 'completed') {
+    mediaButton.disabled = false;
+    mediaButton.textContent = 'Gửi lại';
+    setStatus(transfer.message, 'success');
+  } else if (transfer.state === 'error') {
+    mediaButton.disabled = false;
+    mediaButton.textContent = 'Thử lại';
+    setStatus(transfer.message, 'error');
+  }
+}
+
+async function refreshTransferStatus() {
+  try {
+    const transfer = await sendRuntimeMessage({ action: 'get-transfer-status' });
+    renderTransferStatus(transfer);
+    if (transfer?.state !== 'running' && transferPollTimer) {
+      clearInterval(transferPollTimer);
+      transferPollTimer = null;
+    }
+  } catch (_) {}
+}
+
+function startTransferPolling() {
+  if (!transferPollTimer) transferPollTimer = setInterval(refreshTransferStatus, 500);
+  void refreshTransferStatus();
+}
+
+function updateMediaModeUI() {
+  const audioMode = mediaType.value === 'audio';
+  mediaQuality.disabled = audioMode;
+  mediaButton.textContent = audioMode ? 'Gửi audio' : 'Gửi video';
+  if (!pageData) return;
+  const videoCount = pageData.mediaStreams.filter(stream => stream.hasVideo).length;
+  const audioCount = pageData.mediaStreams.filter(stream => stream.hasAudio).length;
+  mediaStreamCount.textContent = audioMode
+    ? (audioCount ? `${audioCount} luồng audio` : 'Sẽ dùng YouTube.js dự phòng')
+    : (videoCount ? `${videoCount} video · ${audioCount} audio` : 'Sẽ dùng YouTube.js dự phòng');
 }
 
 function setStatus(message, type = '') {
@@ -426,6 +696,183 @@ subtitleButton.addEventListener('click', () => withBusy(subtitleButton, 'Đang t
   setStatus(`Đã tạo phụ đề ${format.toUpperCase()}.`, 'success');
 }).catch(error => setStatus(error.message || String(error), 'error')));
 
+async function downloadDirectAudio(requestedFormat = 'm4a') {
+  setStatus('Đang lấy và giải mã audio qua YouTube.js…', 'running');
+  const youtube = await getInnertube();
+  let lastError = null;
+
+  for (const client of ['ANDROID', 'TV', 'WEB']) {
+    try {
+      const info = await youtube.getBasicInfo(pageData.videoId, { client });
+      const formats = [
+        ...(info.streaming_data?.formats || []),
+        ...(info.streaming_data?.adaptive_formats || [])
+      ];
+      let audioFormats = formats.filter(f => Boolean(f.has_audio) && !f.has_video);
+      if (requestedFormat === 'm4a') {
+        const m4aFormats = audioFormats.filter(f => String(f.mime_type || '').includes('audio/mp4'));
+        if (m4aFormats.length) audioFormats = m4aFormats;
+      } else if (requestedFormat === 'opus') {
+        const opusFormats = audioFormats.filter(f => String(f.mime_type || '').includes('webm') || String(f.mime_type || '').includes('opus'));
+        if (opusFormats.length) audioFormats = opusFormats;
+      }
+      if (!audioFormats.length) {
+        audioFormats = formats.filter(f => Boolean(f.has_audio));
+      }
+      audioFormats.sort((a, b) => (Number(b.bitrate || b.average_bitrate) || 0) - (Number(a.bitrate || a.average_bitrate) || 0));
+
+      const targetFormat = audioFormats[0];
+      if (!targetFormat) {
+        lastError = new Error(`Client ${client} không có luồng audio.`);
+        continue;
+      }
+
+      let directUrl = targetFormat.url;
+      if (!directUrl && typeof targetFormat.decipher === 'function') {
+        directUrl = await targetFormat.decipher(youtube.session.player);
+      }
+      if (!directUrl) {
+        lastError = new Error('Không giải mã được URL audio.');
+        continue;
+      }
+
+      const mime = String(targetFormat.mime_type || '').toLowerCase();
+      let ext = 'm4a';
+      if (mime.includes('webm') || mime.includes('opus')) ext = 'opus';
+      else if (mime.includes('mp4')) ext = 'm4a';
+
+      const filename = `${safeFilename(pageData.title)}.${ext}`;
+      await startDownload({
+        url: directUrl,
+        filename,
+        saveAs: false,
+        conflictAction: 'uniquify'
+      });
+      setStatus(`Đang tải audio ${ext.toUpperCase()} qua trình duyệt!`, 'success');
+      return;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError || new Error('Không thể tải audio qua YouTube.js.');
+}
+
+async function downloadDirectVideo(requestedQuality = 'best') {
+  setStatus('Đang lấy và giải mã video qua YouTube.js…', 'running');
+  const youtube = await getInnertube();
+  let lastError = null;
+
+  for (const client of ['ANDROID', 'TV', 'WEB']) {
+    try {
+      const info = await youtube.getBasicInfo(pageData.videoId, { client });
+      const formats = [
+        ...(info.streaming_data?.formats || []),
+        ...(info.streaming_data?.adaptive_formats || [])
+      ];
+
+      let progressiveFormats = formats.filter(f => Boolean(f.has_video) && Boolean(f.has_audio));
+
+      if (requestedQuality !== 'best') {
+        const targetHeight = Number(requestedQuality) || 0;
+        const matching = progressiveFormats.filter(f => Number(f.height) <= targetHeight);
+        if (matching.length) progressiveFormats = matching;
+      }
+
+      progressiveFormats.sort((a, b) => {
+        if ((Number(b.height) || 0) !== (Number(a.height) || 0)) {
+          return (Number(b.height) || 0) - (Number(a.height) || 0);
+        }
+        return (Number(b.bitrate || b.average_bitrate) || 0) - (Number(a.bitrate || a.average_bitrate) || 0);
+      });
+
+      let targetFormat = progressiveFormats[0];
+      if (!targetFormat) {
+        const videoOnly = formats.filter(f => Boolean(f.has_video)).sort((a, b) => (Number(b.height) || 0) - (Number(a.height) || 0));
+        if (videoOnly.length) {
+          throw new Error('Video này YouTube chỉ cung cấp luồng rời (1080p+). Hãy dùng nút "Gửi sang App" bên dưới để ghép đầy đủ tiếng!');
+        }
+        lastError = new Error(`Client ${client} không có luồng video.`);
+        continue;
+      }
+
+      let directUrl = targetFormat.url;
+      if (!directUrl && typeof targetFormat.decipher === 'function') {
+        directUrl = await targetFormat.decipher(youtube.session.player);
+      }
+      if (!directUrl) {
+        lastError = new Error('Không giải mã được URL video.');
+        continue;
+      }
+
+      const filename = `${safeFilename(pageData.title)}.mp4`;
+      await startDownload({
+        url: directUrl,
+        filename,
+        saveAs: false,
+        conflictAction: 'uniquify'
+      });
+      setStatus(`Đang tải video MP4 (${targetFormat.height || ''}p) qua trình duyệt!`, 'success');
+      return;
+    } catch (err) {
+      lastError = err;
+      if (err.message && err.message.includes('Gửi sang App')) {
+        throw err;
+      }
+    }
+  }
+  throw lastError || new Error('Không thể tải video qua YouTube.js.');
+}
+
+btnDirectVideo?.addEventListener('click', () => withBusy(btnDirectVideo, 'Đang giải mã…', async () => {
+  await downloadDirectVideo(directVideoQuality.value);
+}).catch(error => setStatus(error.message || String(error), 'error')));
+
+btnDirectAudio?.addEventListener('click', () => withBusy(btnDirectAudio, 'Đang giải mã…', async () => {
+  await downloadDirectAudio(directAudioFormat.value);
+}).catch(error => setStatus(error.message || String(error), 'error')));
+
+mediaButton.addEventListener('click', async () => {
+  mediaButton.disabled = true;
+  mediaButton.textContent = 'Đang chuẩn bị…';
+  transferProgress.hidden = false;
+  transferProgressBar.style.width = '0%';
+  try {
+    const requestedType = mediaType.value === 'audio' ? 'audio' : 'video';
+    let streams = uniqueStreams(pageData.mediaStreams || []);
+    const directSelection = selectMediaStreams(streams, mediaQuality.value, requestedType);
+    const hasVideo = directSelection.some(stream => stream.hasVideo);
+    const hasAudio = directSelection.some(stream => stream.hasAudio);
+    const needsFallback = requestedType === 'audio' ? !hasAudio : (!hasVideo || !hasAudio);
+    if (needsFallback) {
+      streams = uniqueStreams([...streams, ...await getYouTubeJsStreams(pageData.videoId, mediaQuality.value, requestedType)]);
+    }
+    const selected = selectMediaStreams(streams, mediaQuality.value, requestedType);
+    if (!selected.length || !selected.some(stream => stream.hasAudio || stream.hasVideo)) {
+      throw new Error(pageData.playabilityReason || 'Không tìm được luồng video/audio có thể tải.');
+    }
+
+    const response = await sendRuntimeMessage({
+      action: 'start-media-transfer',
+      capture: {
+        pageUrl: pageData.pageUrl,
+        title: pageData.title,
+        streams: selected
+      }
+    });
+    if (!response?.ok) throw new Error(response?.error || 'Không thể bắt đầu gửi media.');
+    mediaButton.textContent = 'Đang gửi…';
+    setStatus(`${requestedType === 'audio' ? 'Audio' : 'Video'} đang được tải bằng kết nối của trình duyệt. Bạn có thể đóng popup.`, 'running');
+    startTransferPolling();
+  } catch (error) {
+    mediaButton.disabled = false;
+    mediaButton.textContent = 'Thử lại';
+    transferProgress.hidden = true;
+    setStatus(error?.message || String(error), 'error');
+  }
+});
+
+mediaType.addEventListener('change', updateMediaModeUI);
+
 async function initialise() {
   const tab = await getActiveTab();
   if (!tab?.id || !/^https:\/\/(?:www\.|m\.|music\.)?youtube\.com\//i.test(tab.url || '')) {
@@ -444,8 +891,12 @@ async function initialise() {
     thumbElement.hidden = false;
   }
 
+  if (btnDirectVideo) btnDirectVideo.disabled = false;
+  if (btnDirectAudio) btnDirectAudio.disabled = false;
   thumbnailButton.disabled = false;
   metadataTxtButton.disabled = false;
+  mediaButton.disabled = false;
+  updateMediaModeUI();
   subtitleTrack.innerHTML = '';
   for (const track of pageData.captionTracks) {
     const option = document.createElement('option');
@@ -464,6 +915,9 @@ async function initialise() {
     subtitleCount.textContent = 'Không có track';
   }
   setStatus('Sẵn sàng tải asset.', 'success');
+  const existingTransfer = await sendRuntimeMessage({ action: 'get-transfer-status' }).catch(() => null);
+  if (existingTransfer?.state === 'running') startTransferPolling();
+  else renderTransferStatus(existingTransfer);
 }
 
 initialise().catch(error => {

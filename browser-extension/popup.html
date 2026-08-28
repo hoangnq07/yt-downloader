@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>YT Downloader Pro Assets</title>
+  <title>YT Downloader Pro Bridge</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
@@ -11,8 +11,8 @@
     <header class="brand">
       <img class="logo" src="icons/icon48.png" alt="">
       <div>
-        <h1>YouTube Assets</h1>
-        <p>Thumbnail · Metadata · Subtitle</p>
+        <h1>YouTube Bridge</h1>
+        <p>Video · Audio · Thumbnail · Metadata · Subtitle</p>
       </div>
     </header>
 
@@ -22,6 +22,66 @@
         <p class="title" id="videoTitle">Đang đọc video…</p>
         <p class="channel" id="videoChannel"></p>
       </div>
+    </section>
+
+    <!-- Card 1: Tải trực tiếp bằng YouTube.js (Browser) -->
+    <section class="asset-card direct-card">
+      <div class="asset-heading">
+        <strong>⚡ Tải trực tiếp bằng YouTube.js</strong>
+        <span class="badge-direct">Trình duyệt tải ngay</span>
+      </div>
+
+      <div class="control-group">
+        <label class="control-label">Video MP4 (Có sẵn tiếng):</label>
+        <div class="control-row">
+          <select id="directVideoQuality" aria-label="Chất lượng video trực tiếp">
+            <option value="best">Tốt nhất có sẵn (720p / 360p)</option>
+            <option value="720">720p HD</option>
+            <option value="360">360p</option>
+          </select>
+          <button id="btnDirectVideo" class="btn-primary" disabled>Tải MP4</button>
+        </div>
+      </div>
+
+      <div class="control-group" style="margin-top: 8px;">
+        <label class="control-label">Audio gốc (Nhạc / Âm thanh):</label>
+        <div class="control-row">
+          <select id="directAudioFormat" aria-label="Định dạng audio trực tiếp">
+            <option value="m4a">M4A (AAC 128kbps - Tương thích cao)</option>
+            <option value="opus">Opus / WebM (160kbps - Âm thanh cao)</option>
+          </select>
+          <button id="btnDirectAudio" class="btn-primary" disabled>Tải Audio</button>
+        </div>
+      </div>
+      <p class="bridge-note">YouTube.js giải mã trực tiếp link video/audio của YouTube và tải thẳng về máy qua trình duyệt.</p>
+    </section>
+
+    <!-- Card 2: Ghép 1080p/4K & Chuyển MP3 bằng App (Browser Bridge) -->
+    <section class="asset-card bridge-card">
+      <div class="asset-heading">
+        <strong>🚀 Ghép 1080p/4K & Chuyển MP3 bằng App</strong>
+        <span id="mediaStreamCount">Đang tìm…</span>
+      </div>
+      <div class="control-row">
+        <select id="mediaType" aria-label="Loại media gửi app">
+          <option value="video">Video MP4 (1080p / 2K / 4K)</option>
+          <option value="audio">Audio → MP3 (FFmpeg)</option>
+        </select>
+        <select id="mediaQuality" aria-label="Chất lượng video">
+          <option value="best">Tốt nhất có sẵn</option>
+          <option value="2160">Tối đa 2160p (4K)</option>
+          <option value="1440">Tối đa 1440p (2K)</option>
+          <option value="1080">Tối đa 1080p (Full HD)</option>
+          <option value="720">Tối đa 720p</option>
+          <option value="480">Tối đa 480p</option>
+          <option value="360">Tối đa 360p</option>
+        </select>
+        <button id="sendMediaToApp" disabled>Gửi video</button>
+      </div>
+      <div class="transfer-progress" id="transferProgress" hidden>
+        <div id="transferProgressBar"></div>
+      </div>
+      <p class="bridge-note">Gửi media sang app YT Downloader Pro để ghép luồng video + audio độ nét cao hoặc chuyển sang MP3.</p>
     </section>
 
     <section class="asset-card">
@@ -66,9 +126,10 @@
       </div>
     </section>
 
-    <p class="savior-hint">Video và MP3: sử dụng Savior của Cốc Cốc.</p>
+    <p class="savior-hint">Chỉ tải nội dung bạn sở hữu hoặc được phép tải.</p>
     <p class="status" id="status" role="status" aria-live="polite"></p>
   </main>
-  <script src="popup.js"></script>
+  <iframe id="youtubeJsSandbox" src="sandbox.html" hidden title=""></iframe>
+  <script src="popup.bundle.js"></script>
 </body>
 </html>

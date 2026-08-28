@@ -108,12 +108,12 @@
 
         <div class="settings-section browser-bridge-settings">
           <div class="bridge-settings-heading">
-            <label class="settings-label">YouTube Assets Extension</label>
+            <label class="settings-label">YouTube Bridge Extension</label>
             <span class="bridge-status-badge" id="bridgeSettingsBadge">Chưa cài</span>
           </div>
-          <p class="bridge-settings-desc">Extension độc lập để tải thumbnail, báo cáo metadata/SEO dạng TXT và phụ đề SRT/VTT/JSON. Video và MP3 dùng Savior của Cốc Cốc.</p>
+          <p class="bridge-settings-desc">Extension lấy video/audio bằng chính kết nối, VPN và phiên YouTube của trình duyệt; khi cần sẽ dùng YouTube.js làm fallback. App nhận media và ghép bằng FFmpeg.</p>
           <div class="bridge-settings-actions">
-            <button class="bridge-secondary-btn" id="btnInstallBrowserBridgeSettings">Chuẩn bị Assets Extension</button>
+            <button class="bridge-secondary-btn" id="btnInstallBrowserBridgeSettings">Chuẩn bị Bridge Extension</button>
             <button class="bridge-secondary-btn" id="btnOpenBrowserBridgeFolder">Mở thư mục extension</button>
             <button class="bridge-secondary-btn" id="btnCopyBrowserBridgePath">Sao chép đường dẫn</button>
           </div>
@@ -121,7 +121,7 @@
             <li>Mở <strong>coccoc://extensions</strong> hoặc <strong>chrome://extensions</strong>.</li>
             <li>Bật Chế độ dành cho nhà phát triển và chọn “Tải tiện ích đã giải nén”.</li>
             <li>Chọn thư mục extension do app mở ra.</li>
-            <li>Nếu extension đã được nạp trước đó, bấm <strong>Tải lại/Reload</strong> để nhận phiên bản 2.1.1.</li>
+            <li>Nếu extension đã được nạp trước đó, bấm <strong>Tải lại/Reload</strong> để nhận phiên bản 3.0.1.</li>
           </ol>
           <p class="bridge-extension-path" id="bridgeExtensionPath"></p>
         </div>
@@ -188,11 +188,12 @@
         <p class="url-hint" id="urlHint">Hỗ trợ youtube.com, music.youtube.com, youtu.be, shorts, live, playlist</p>
         <div class="browser-bridge-panel hidden" id="browserBridgePanel">
           <div class="browser-bridge-copy">
-            <strong>Dùng Savior cho video và MP3</strong>
-            <span>Assets Extension chỉ tải thumbnail, metadata và phụ đề trực tiếp từ tab YouTube.</span>
+            <strong>Dùng Browser Bridge khi yt-dlp bị YouTube chặn</strong>
+            <span>Mở video trong trình duyệt, chọn Video MP4 hoặc Audio → MP3, gửi sang app rồi bấm Nhận media.</span>
           </div>
           <div class="browser-bridge-actions">
-            <button class="bridge-secondary-btn" id="btnInstallBrowserBridge">Cài Assets Extension</button>
+            <button class="bridge-secondary-btn" id="btnInstallBrowserBridge">Cài Bridge Extension</button>
+            <button class="bridge-primary-btn" id="btnReceiveBrowserBridge">Nhận media</button>
           </div>
         </div>
       </section>

@@ -371,7 +371,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const status = await InstallBrowserBridge();
       await refreshBrowserBridgeStatus();
-      showToast('Đã chuẩn bị YouTube Assets Extension 2.1.3. Bấm Reload trong trang Extensions để cập nhật.', 'success', 9000);
+      showToast('Đã chuẩn bị YouTube Bridge Extension 3.0.1 và đăng ký native host. Bấm Reload trong trang Extensions để cập nhật.', 'success', 9000);
       try {
         await OpenBrowserBridgeFolder();
       } catch (openError) {
@@ -379,7 +379,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
       return status;
     } catch (error) {
-      showToast(`Không thể chuẩn bị Assets Extension: ${error?.message || error}`, 'error', 8000);
+      showToast(`Không thể chuẩn bị Bridge Extension: ${error?.message || error}`, 'error', 8000);
       return null;
     }
   }
@@ -448,7 +448,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       showToast(error?.message || String(error), 'error', 8000);
     } finally {
       button.disabled = false;
-      button.textContent = 'Nhận luồng';
+      button.textContent = 'Nhận media';
     }
   });
 
@@ -551,6 +551,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       infoCard.classList.remove('hidden');
       downloadPanel.classList.remove('hidden');
+      browserBridgePanel?.classList.remove('hidden');
       if (info._app_downloadable === false) {
         setHint(info._app_notice || 'Video hiện chưa có định dạng tải xuống.', 'error');
         browserBridgePanel?.classList.remove('hidden');
@@ -561,7 +562,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (err) {
       const errorMessage = String(err?.message || err || '');
       if (errorMessage.includes('YOUTUBE_BOT_CHECK')) {
-        const guidance = 'YouTube đang chặn yêu cầu tự động. Hãy dùng Savior của Cốc Cốc cho video/MP3; Assets Extension dùng cho thumbnail, metadata và phụ đề.';
+        const guidance = 'YouTube đang chặn yêu cầu tự động. Hãy mở video trong trình duyệt, dùng Bridge Extension gửi media sang app rồi bấm Nhận media.';
         setHint(guidance, 'error');
         showToast(guidance, 'error', 8000);
       } else {
@@ -577,6 +578,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   function useBrowserBridgeCapture(capture) {
     browserCapture = capture;
     const videoID = capture.videoId || '';
+    const hasVideo = (capture.streams || []).some(stream => stream.hasVideo);
+    const hasAudio = (capture.streams || []).some(stream => stream.hasAudio);
     const formats = (capture.streams || []).filter(stream => stream.hasVideo).map(stream => ({
       height: stream.height || 0,
       vcodec: 'browser',
@@ -591,6 +594,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       formats,
       _app_downloadable: true,
       _app_browser_bridge: true,
+      _app_bridge_has_video: hasVideo,
+      _app_bridge_has_audio: hasAudio,
       _app_bridge_capture_id: capture.id
     };
 
@@ -606,10 +611,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     document.querySelectorAll('.tab').forEach(tab => {
       const type = tab.getAttribute('data-tab');
-      tab.classList.toggle('bridge-unavailable', type !== 'video' && type !== 'audio');
+      const available = (type === 'video' && hasVideo) || (type === 'audio' && hasAudio);
+      tab.classList.toggle('bridge-unavailable', !available);
     });
-    document.querySelector('.tab[data-tab="video"]')?.click();
-    setHint('Đã nhận file media do trình duyệt tải qua VPN. Sẵn sàng ghép bằng FFmpeg.', 'success');
+    document.querySelector(`.tab[data-tab="${hasVideo ? 'video' : 'audio'}"]`)?.click();
+    setHint(hasVideo
+      ? 'Đã nhận video/audio từ trình duyệt. Sẵn sàng ghép bằng FFmpeg.'
+      : 'Đã nhận audio từ trình duyệt. Chọn MP3 và bấm Tải xuống để chuyển đổi.', 'success');
   }
 
   function renderSubtitles(info) {
@@ -780,6 +788,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (videoInfo._app_browser_bridge && activeTab !== 'video' && activeTab !== 'audio') {
       showToast('Browser Bridge hiện chỉ hỗ trợ tải video hoặc audio.', 'error');
+      return;
+    }
+
+    if (videoInfo._app_browser_bridge && ((activeTab === 'video' && !videoInfo._app_bridge_has_video) || (activeTab === 'audio' && !videoInfo._app_bridge_has_audio))) {
+      showToast(`Capture này không có ${activeTab === 'video' ? 'video' : 'audio'}. Hãy gửi lại đúng loại từ extension.`, 'error');
       return;
     }
 

@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-func TestEmbeddedAssetsExtensionIdentityAndCapabilities(t *testing.T) {
+func TestEmbeddedBridgeExtensionIdentityAndCapabilities(t *testing.T) {
 	manifestData, err := browserExtensionAssets.ReadFile("browser-extension/manifest.json")
 	if err != nil {
 		t.Fatal(err)
@@ -39,12 +39,12 @@ func TestEmbeddedAssetsExtensionIdentityAndCapabilities(t *testing.T) {
 		t.Fatalf("extension ID = %s, want %s", extensionID, browserBridgeExtensionID)
 	}
 
-	if manifest.Version != "2.1.3" {
-		t.Fatalf("extension version = %s, want 2.1.3", manifest.Version)
+	if manifest.Version != "3.0.1" {
+		t.Fatalf("extension version = %s, want 3.0.1", manifest.Version)
 	}
 	permissions := strings.Join(manifest.Permissions, ",")
-	if !strings.Contains(permissions, "downloads") || !strings.Contains(permissions, "scripting") {
-		t.Fatalf("assets extension permissions are incomplete: %v", manifest.Permissions)
+	if !strings.Contains(permissions, "downloads") || !strings.Contains(permissions, "scripting") || !strings.Contains(permissions, "nativeMessaging") || !strings.Contains(permissions, "declarativeNetRequestWithHostAccess") {
+		t.Fatalf("bridge extension permissions are incomplete: %v", manifest.Permissions)
 	}
 
 	popup, err := browserExtensionAssets.ReadFile("browser-extension/popup.js")
@@ -63,8 +63,22 @@ func TestEmbeddedAssetsExtensionIdentityAndCapabilities(t *testing.T) {
 	if !bytes.Contains(popup, []byte("normalizeChapterLine")) || !bytes.Contains(popup, []byte("normalizeChapterLine(line) || line")) || !bytes.Contains(popup, []byte(".map(normalizeChapterLine)")) {
 		t.Fatal("popup does not normalize playlist timestamps in the TXT SEO metadata report")
 	}
-	if bytes.Contains(popup, []byte(browserBridgeHostName)) {
-		t.Fatal("assets extension should not depend on the native video bridge")
+	if !bytes.Contains(popup, []byte("getYouTubeJsStreams")) || !bytes.Contains(popup, []byte("streamingData")) {
+		t.Fatal("popup does not provide the YouTube.js streaming fallback")
+	}
+	background, err := browserExtensionAssets.ReadFile("browser-extension/background.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(background, []byte(browserBridgeHostName)) || !bytes.Contains(background, []byte("transfer-chunk")) {
+		t.Fatal("extension does not transfer media through the native bridge")
+	}
+	bundle, err := browserExtensionAssets.ReadFile("browser-extension/popup.bundle.js")
+	if err != nil {
+		t.Fatal("built popup bundle is missing; run npm run build:extension: ", err)
+	}
+	if !bytes.Contains(bundle, []byte("youtubei.js")) || !bytes.Contains(bundle, []byte("getYouTubeJsStreams")) {
+		t.Fatal("built popup bundle does not contain the YouTube.js fallback")
 	}
 
 	for _, size := range []string{"16", "32", "48", "128"} {
@@ -80,7 +94,12 @@ func TestEmbeddedAssetsExtensionIdentityAndCapabilities(t *testing.T) {
 
 func TestInstallBrowserBridgeKeepsIconDirectory(t *testing.T) {
 	t.Setenv("APPDATA", t.TempDir())
-	status, err := (&App{}).InstallBrowserBridge()
+	executablePath := filepath.Join(t.TempDir(), "yt-downloader-pro.exe")
+	registeredManifest := ""
+	status, err := (&App{}).installBrowserBridge(executablePath, func(manifestPath string) error {
+		registeredManifest = manifestPath
+		return nil
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,6 +108,19 @@ func TestInstallBrowserBridgeKeepsIconDirectory(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(status.ExtensionPath, "icons", "icon128.png")); err != nil {
 		t.Fatalf("installed extension is missing its icon directory: %v", err)
+	}
+	if registeredManifest != browserNativeHostManifestPath() {
+		t.Fatalf("registered manifest = %q, want %q", registeredManifest, browserNativeHostManifestPath())
+	}
+	manifestData, err := os.ReadFile(registeredManifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(manifestData, []byte(browserBridgeHostName)) || !bytes.Contains(manifestData, []byte(browserBridgeExtensionID)) {
+		t.Fatalf("native host manifest is incomplete: %s", manifestData)
+	}
+	if _, err := (&App{}).installBrowserBridge(executablePath, func(string) error { return nil }); err != nil {
+		t.Fatalf("preparing the extension a second time should replace existing files: %v", err)
 	}
 }
 

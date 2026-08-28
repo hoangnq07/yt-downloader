@@ -4,10 +4,16 @@
   "version": "1.0.0",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build:extension": "esbuild ../browser-extension/popup.js --bundle --format=iife --target=chrome109 --alias:youtubei.js/web=./node_modules/youtubei.js/dist/src/platform/web.js --outfile=../browser-extension/popup.bundle.js",
+    "build": "npm run build:extension && vite build",
+    "test:extension": "node --test tests/background.test.cjs",
     "preview": "vite preview"
   },
+  "dependencies": {
+    "youtubei.js": "17.2.0"
+  },
   "devDependencies": {
+    "esbuild": "^0.28.0",
     "vite": "^7.0.0"
   }
 }

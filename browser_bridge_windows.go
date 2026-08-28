@@ -46,3 +46,7 @@ func registerBrowserNativeHost(manifestPath string) error {
 	}
 	return nil
 }
+
+func replaceFileAtomic(sourcePath, targetPath string) error {
+	return windows.Rename(sourcePath, targetPath)
+}

@@ -1,18 +1,21 @@
 {
   "manifest_version": 3,
-  "name": "YT Downloader Pro Assets",
-  "version": "2.1.3",
-  "description": "Tải thumbnail, metadata và phụ đề từ video YouTube đang mở.",
+  "name": "YT Downloader Pro Bridge",
+  "version": "3.0.1",
+  "description": "Gửi video/audio đang phát sang YT Downloader Pro và tải các asset YouTube.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwbka/9eeuDmS5tJhdXDupkJG1LzX5EjGmuMoILMujlXWkHJhb+zR0daI1TERdlEYX3Eux+feHBF1pcLlaR3uSRpxu4WOpnNuBriNLd61Y8msV/Hk57irxpawp49b+UamI+dby6UO5gV2EbWQrKIHLVpPxzFCYUo8HFRLDSA7n0xUVBL0Hb/87AuwsllXXhHyDLDdy6EDYhQlI3l7Tl5Qdtb1O2Skv1ilriHoNO9DF/0gp7C+1v0ZRPzCb8OL/RL43kNtwP82YAAvWAeu7fQNIsgSbtq+Q7V9zplGZ3qy+ooOWJhAPux1XgFAK+3mU2YPZQbL4gqVKAde8V7kt/A4EQIDAQAB",
   "permissions": [
     "activeTab",
+    "declarativeNetRequestWithHostAccess",
     "downloads",
+    "nativeMessaging",
     "scripting"
   ],
   "host_permissions": [
     "https://*.youtube.com/*",
     "https://youtu.be/*",
-    "https://i.ytimg.com/*"
+    "https://i.ytimg.com/*",
+    "https://*.googlevideo.com/*"
   ],
   "icons": {
     "16": "icons/icon16.png",
@@ -21,12 +24,31 @@
     "128": "icons/icon128.png"
   },
   "action": {
-    "default_title": "Tải thumbnail, metadata và phụ đề",
+    "default_title": "Gửi video sang YT Downloader Pro",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",
       "48": "icons/icon48.png"
     },
     "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "youtube_headers",
+        "enabled": true,
+        "path": "rules.json"
+      }
+    ]
+  },
+  "sandbox": {
+    "pages": ["sandbox.html"]
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'",
+    "sandbox": "sandbox allow-scripts; script-src 'self' 'unsafe-eval'; object-src 'self'"
   }
 }

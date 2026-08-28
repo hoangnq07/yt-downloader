@@ -120,6 +120,14 @@ func browserNativeHostManifestPath() string {
 }
 
 func (a *App) InstallBrowserBridge() (BrowserBridgeStatus, error) {
+	executablePath, err := os.Executable()
+	if err != nil {
+		return BrowserBridgeStatus{}, fmt.Errorf("không thể xác định đường dẫn ứng dụng: %w", err)
+	}
+	return a.installBrowserBridge(executablePath, registerBrowserNativeHost)
+}
+
+func (a *App) installBrowserBridge(executablePath string, registerNativeHost func(string) error) (BrowserBridgeStatus, error) {
 	status := BrowserBridgeStatus{
 		ExtensionID:   browserBridgeExtensionID,
 		ExtensionPath: browserExtensionDir(),
@@ -148,8 +156,38 @@ func (a *App) InstallBrowserBridge() (BrowserBridgeStatus, error) {
 		return status, fmt.Errorf("không thể chuẩn bị extension: %w", err)
 	}
 
+	executablePath, err = filepath.Abs(executablePath)
+	if err != nil {
+		return status, fmt.Errorf("đường dẫn ứng dụng không hợp lệ: %w", err)
+	}
+	nativeManifest := struct {
+		Name           string   `json:"name"`
+		Description    string   `json:"description"`
+		Path           string   `json:"path"`
+		Type           string   `json:"type"`
+		AllowedOrigins []string `json:"allowed_origins"`
+	}{
+		Name:           browserBridgeHostName,
+		Description:    "YT Downloader Pro Browser Bridge",
+		Path:           executablePath,
+		Type:           "stdio",
+		AllowedOrigins: []string{"chrome-extension://" + browserBridgeExtensionID + "/"},
+	}
+	manifestData, err := json.MarshalIndent(nativeManifest, "", "  ")
+	if err != nil {
+		return status, fmt.Errorf("không thể tạo native host manifest: %w", err)
+	}
+	manifestPath := browserNativeHostManifestPath()
+	if err := writeFileAtomic(manifestPath, manifestData, 0600); err != nil {
+		return status, fmt.Errorf("không thể lưu native host manifest: %w", err)
+	}
+	if err := registerNativeHost(manifestPath); err != nil {
+		_ = os.Remove(manifestPath)
+		return status, fmt.Errorf("không thể đăng ký Browser Bridge: %w", err)
+	}
+
 	status.Installed = true
-	status.Message = "Extension tải thumbnail, metadata và phụ đề đã sẵn sàng."
+	status.Message = "Extension và Browser Bridge tải media đã sẵn sàng."
 	return status, nil
 }
 
@@ -159,11 +197,12 @@ func (a *App) GetBrowserBridgeStatus() BrowserBridgeStatus {
 		ExtensionPath: browserExtensionDir(),
 	}
 	_, extensionErr := os.Stat(filepath.Join(status.ExtensionPath, "manifest.json"))
-	status.Installed = extensionErr == nil
+	_, nativeHostErr := os.Stat(browserNativeHostManifestPath())
+	status.Installed = extensionErr == nil && nativeHostErr == nil
 	if status.Installed {
-		status.Message = "YouTube Assets Extension đã được chuẩn bị trên máy."
+		status.Message = "YouTube Extension và Browser Bridge đã được chuẩn bị trên máy."
 	} else {
-		status.Message = "YouTube Assets Extension chưa được chuẩn bị."
+		status.Message = "YouTube Extension hoặc Browser Bridge chưa được chuẩn bị."
 	}
 	return status
 }
@@ -244,7 +283,7 @@ func (a *App) GetBrowserBridgeCapture(pageURL string) (BrowserBridgeCapture, err
 	entries, err := os.ReadDir(browserCaptureDir())
 	if err != nil {
 		if os.IsNotExist(err) {
-			return BrowserBridgeCapture{}, errors.New("chưa nhận được luồng từ extension")
+			return BrowserBridgeCapture{}, errors.New("chưa nhận được media từ extension")
 		}
 		return BrowserBridgeCapture{}, err
 	}
@@ -260,16 +299,16 @@ func (a *App) GetBrowserBridgeCapture(pageURL string) (BrowserBridgeCapture, err
 		}
 	}
 	if len(captures) == 0 {
-		return BrowserBridgeCapture{}, errors.New("chưa có luồng cho video này; hãy phát video vài giây, bấm extension rồi gửi sang app")
+		return BrowserBridgeCapture{}, errors.New("chưa có media cho video này; hãy mở extension, chọn chất lượng và bấm Gửi sang app")
 	}
 
 	sort.Slice(captures, func(i, j int) bool { return browserCaptureTime(captures[i]).After(browserCaptureTime(captures[j])) })
 	capture := captures[0]
 	if time.Since(browserCaptureTime(capture)) > browserCaptureTTL {
-		return BrowserBridgeCapture{}, errors.New("link media đã hết hạn; hãy gửi lại từ extension")
+		return BrowserBridgeCapture{}, errors.New("media đã hết hạn; hãy gửi lại từ extension")
 	}
 	if !captureHasUsableMedia(capture) {
-		return BrowserBridgeCapture{}, errors.New("extension chưa bắt đủ luồng video/audio; hãy phát video thêm vài giây")
+		return BrowserBridgeCapture{}, errors.New("extension chưa gửi đủ video/audio; hãy gửi lại từ tab YouTube")
 	}
 	if err := validateLocalCaptureFiles(capture); err != nil {
 		return BrowserBridgeCapture{}, err
@@ -806,7 +845,7 @@ func writeFileAtomic(target string, data []byte, mode fs.FileMode) error {
 	if err := os.WriteFile(temporary, data, mode); err != nil {
 		return err
 	}
-	if err := os.Rename(temporary, target); err != nil {
+	if err := replaceFileAtomic(temporary, target); err != nil {
 		_ = os.Remove(temporary)
 		return err
 	}
