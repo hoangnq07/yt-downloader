@@ -1019,7 +1019,7 @@ func (state *browserNativeHostState) runNativeDownload(taskID, targetURL, title,
 	bridgeLog("runNativeDownload: chạy lệnh: %s %v", ytdlpPath, args)
 
 	cmd := exec.Command(ytdlpPath, args...)
-	cmd.SysProcAttr = hiddenWindowAttr()
+	cmd.SysProcAttr = detachedWindowAttr()
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		reportActiveBridgeTaskError(taskID, err.Error())
@@ -1129,7 +1129,18 @@ func (state *browserNativeHostState) runNativeDownload(taskID, targetURL, title,
 	}
 
 	if finalFilePath == "" {
-		finalFilePath = nextAvailableMediaPath(outputDir, title, exportFormat)
+		// Thử tìm file thực tế vừa được tạo/cập nhật trong thư mục đích
+		if candidate := findDownloadedMediaFile(outputDir, title, exportFormat); candidate != "" {
+			finalFilePath = candidate
+		}
+	}
+
+	// Xác thực file thực sự tồn tại trên đĩa trước khi báo hoàn tất
+	if finalFilePath == "" || !fileExists(finalFilePath) {
+		errMsg := fmt.Sprintf("yt-dlp đã chạy xong nhưng không tìm thấy file đầu ra trong %s", outputDir)
+		reportActiveBridgeTaskError(taskID, errMsg)
+		bridgeLog("runNativeDownload: task %s thất bại: %s", taskID, errMsg)
+		return
 	}
 
 	reportActiveBridgeTaskFinished(taskID, finalFilePath)
@@ -1308,6 +1319,47 @@ func safeBrowserStreamExtension(container string) string {
 	default:
 		return "media"
 	}
+}
+
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir() && info.Size() > 0
+}
+
+// findDownloadedMediaFile tìm file media trong thư mục đầu ra có tên
+// bắt đầu bằng title hoặc được sửa đổi gần đây nhất (trong vòng 5 phút).
+func findDownloadedMediaFile(outputDir, title, format string) string {
+	entries, err := os.ReadDir(outputDir)
+	if err != nil {
+		return ""
+	}
+	ext := "." + strings.ToLower(format)
+	var bestMatch string
+	var bestModTime time.Time
+	now := time.Now()
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !strings.HasSuffix(strings.ToLower(name), ext) {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		// Chỉ xét file được sửa đổi trong vòng 5 phút qua
+		if now.Sub(info.ModTime()) > 5*time.Minute {
+			continue
+		}
+		if info.ModTime().After(bestModTime) {
+			bestModTime = info.ModTime()
+			bestMatch = filepath.Join(outputDir, name)
+		}
+	}
+	return bestMatch
 }
 
 func validatedBrowserCapture(message browserBridgeNativeMessage) (BrowserBridgeCapture, error) {

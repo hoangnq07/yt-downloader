@@ -5,6 +5,7 @@ package main
 import (
 	"errors"
 	"os"
+	"syscall"
 )
 
 func registerBrowserNativeHost(string) error {
@@ -13,4 +14,12 @@ func registerBrowserNativeHost(string) error {
 
 func replaceFileAtomic(sourcePath, targetPath string) error {
 	return os.Rename(sourcePath, targetPath)
+}
+
+func hiddenWindowAttr() *syscall.SysProcAttr {
+	return nil
+}
+
+func detachedWindowAttr() *syscall.SysProcAttr {
+	return nil
 }
