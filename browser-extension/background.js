@@ -54,11 +54,13 @@ async function appendBridgeLog(level, message, data = null) {
 }
 
 // Giữ service worker sống khi popup mở port keepalive
-chrome.runtime.onConnect.addListener(port => {
-  if (port.name === 'popup-keepalive') {
-    port.onDisconnect.addListener(() => {});
-  }
-});
+if (typeof chrome !== 'undefined' && chrome.runtime?.onConnect?.addListener) {
+  chrome.runtime.onConnect.addListener(port => {
+    if (port.name === 'popup-keepalive') {
+      port.onDisconnect.addListener(() => {});
+    }
+  });
+}
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.action === 'get-transfer-status') {

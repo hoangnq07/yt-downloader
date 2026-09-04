@@ -118,10 +118,8 @@ func existingFile(path string) string {
 func (b *BinaryManager) refreshPaths() {
 	var ytdlpPath, ffmpegPath, ffprobePath string
 
-	if found, err := exec.LookPath("yt-dlp"); err == nil && found != "" {
-		ytdlpPath = found
-	}
-
+	// Luôn ưu tiên các binary do app quản lý (standalone, không bị dính plugin
+	// bên thứ ba từ môi trường Python hệ thống như yt-dlp-getpot-wpc)
 	for _, directory := range b.candidateBinDirectories() {
 		if ytdlpPath == "" {
 			ytdlpPath = existingFile(filepath.Join(directory, "yt-dlp.exe"))
@@ -134,6 +132,7 @@ func (b *BinaryManager) refreshPaths() {
 		}
 	}
 
+	// Chỉ fallback sang PATH hệ thống khi không tìm thấy binary nội bộ của app
 	if ytdlpPath == "" {
 		if found, err := exec.LookPath("yt-dlp"); err == nil {
 			ytdlpPath = found
@@ -193,7 +192,7 @@ func (b *BinaryManager) BuildArgs(baseArgs ...string) []string {
 		args = append(args, "--ffmpeg-location", ffmpegDir)
 	}
 	if nodePath, err := exec.LookPath("node"); err == nil && nodePath != "" {
-		args = append(args, "--js-runtimes", fmt.Sprintf("node:%s", nodePath), "--extractor-args", "youtube:player_client=tv_simply")
+		args = append(args, "--js-runtimes", fmt.Sprintf("node:%s", nodePath))
 	}
 	return append(args, baseArgs...)
 }

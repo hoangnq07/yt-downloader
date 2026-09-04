@@ -39730,6 +39730,47 @@ ${getNsigProcessorFn(eval_args.n, eval_args.sp, eval_args.sig)}`;
       });
     });
   }
+  function streamKey(stream) {
+    return `${stream.itag || 0}|${stream.url || ""}`;
+  }
+  function uniqueStreams(streams) {
+    const seen = /* @__PURE__ */ new Set();
+    return streams.filter((stream) => {
+      const key = streamKey(stream);
+      if (!stream.url || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+  function selectMediaStreams(streams, requestedQuality) {
+    const audios = streams.filter((stream) => stream.hasAudio && !stream.hasVideo).sort((left, right) => {
+      const leftM4a = left.container === "m4a" ? 1 : 0;
+      const rightM4a = right.container === "m4a" ? 1 : 0;
+      if (rightM4a !== leftM4a) return rightM4a - leftM4a;
+      return (right.bitrate || 0) - (left.bitrate || 0);
+    });
+    const desiredHeight = requestedQuality === "best" ? 0 : Number(requestedQuality) || 0;
+    let videos = streams.filter((stream) => stream.hasVideo && (!desiredHeight || !stream.height || stream.height <= desiredHeight));
+    if (!videos.length && desiredHeight) videos = streams.filter((stream) => stream.hasVideo);
+    videos.sort((left, right) => {
+      if ((right.height || 0) !== (left.height || 0)) return (right.height || 0) - (left.height || 0);
+      if (audios.length > 0) {
+        const leftAdaptive = !left.hasAudio ? 1 : 0;
+        const rightAdaptive = !right.hasAudio ? 1 : 0;
+        if (rightAdaptive !== leftAdaptive) return rightAdaptive - leftAdaptive;
+      }
+      const leftMp4 = left.container === "mp4" ? 1 : 0;
+      const rightMp4 = right.container === "mp4" ? 1 : 0;
+      if (rightMp4 !== leftMp4) return rightMp4 - leftMp4;
+      return (right.bitrate || 0) - (left.bitrate || 0);
+    });
+    const video = videos[0] || null;
+    if (video?.hasAudio) return [video];
+    if (video && audios[0]) return [video, audios[0]];
+    if (video) return [video];
+    if (audios[0]) return [audios[0]];
+    return [];
+  }
   function normalizeYouTubeJsFormat(format, url, overrideAudioOnly = false) {
     const mimeType = String(format.mime_type || "");
     const baseMimeType = mimeType.split(";")[0].trim().toLowerCase();
@@ -40175,17 +40216,31 @@ ${body}`;
     try {
       const quality = mediaQuality.value || "1080";
       const exportFormat = "mp4";
-      setStatus(`\u0110ang kh\u1EDFi \u0111\u1ED9ng t\u1EA3i video ch\u1EA5t l\u01B0\u1EE3ng cao ${quality}p\u2026`, "running");
+      setStatus(`\u0110ang chu\u1EA9n b\u1ECB lu\u1ED3ng video ${quality}p t\u1EEB tr\xECnh duy\u1EC7t\u2026`, "running");
+      let streams = uniqueStreams(pageData.mediaStreams || []);
+      const directSelection = selectMediaStreams(streams, quality);
+      const hasVideo = directSelection.some((stream) => stream.hasVideo);
+      const hasAudio = directSelection.some((stream) => stream.hasAudio);
+      if (!hasVideo || !hasAudio) {
+        const extra = await getYouTubeJsStreams(pageData.videoId, quality, "video").catch(() => []);
+        streams = uniqueStreams([...streams, ...extra]);
+      }
+      const selected = selectMediaStreams(streams, quality);
+      if (!selected.length || !selected.some((stream) => stream.hasVideo)) {
+        throw new Error(pageData.playabilityReason || "Kh\xF4ng t\xECm \u0111\u01B0\u1EE3c lu\u1ED3ng video ch\u1EA5t l\u01B0\u1EE3ng n\xE0y. H\xE3y th\u1EED ch\u1ECDn \u0111\u1ED9 ph\xE2n gi\u1EA3i kh\xE1c.");
+      }
       const response = await sendRuntimeMessage({
-        action: "start-native-download",
-        pageUrl: pageData.canonicalUrl || pageData.pageUrl,
-        title: pageData.title,
-        quality,
-        exportFormat
+        action: "start-media-transfer",
+        capture: {
+          pageUrl: pageData.canonicalUrl || pageData.pageUrl,
+          title: pageData.title,
+          exportFormat,
+          streams: selected
+        }
       });
       if (!response?.ok) throw new Error(response?.error || "Kh\xF4ng th\u1EC3 b\u1EAFt \u0111\u1EA7u t\u1EA3i media.");
-      mediaButton.textContent = "\u0110ang t\u1EA3i\u2026";
-      setStatus(`\u0110ang t\u1EA3i video ${quality}p ch\u1EA5t l\u01B0\u1EE3ng cao \u0111\u1EA7y \u0111\u1EE7 \xE2m thanh\u2026 B\u1EA1n c\xF3 th\u1EC3 \u0111\xF3ng popup.`, "running");
+      mediaButton.textContent = "\u0110ang g\u1EEDi\u2026";
+      setStatus(`\u0110ang t\u1EA3i video ${quality}p qua tr\xECnh duy\u1EC7t sang app\u2026 B\u1EA1n c\xF3 th\u1EC3 \u0111\xF3ng popup.`, "running");
       startTransferPolling();
     } catch (error2) {
       mediaButton.disabled = false;

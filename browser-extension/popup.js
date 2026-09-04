@@ -900,18 +900,33 @@ mediaButton.addEventListener('click', async () => {
   try {
     const quality = mediaQuality.value || '1080';
     const exportFormat = 'mp4';
-    setStatus(`Đang khởi động tải video chất lượng cao ${quality}p…`, 'running');
+    setStatus(`Đang chuẩn bị luồng video ${quality}p từ trình duyệt…`, 'running');
+
+    let streams = uniqueStreams(pageData.mediaStreams || []);
+    const directSelection = selectMediaStreams(streams, quality);
+    const hasVideo = directSelection.some(stream => stream.hasVideo);
+    const hasAudio = directSelection.some(stream => stream.hasAudio);
+    if (!hasVideo || !hasAudio) {
+      const extra = await getYouTubeJsStreams(pageData.videoId, quality, 'video').catch(() => []);
+      streams = uniqueStreams([...streams, ...extra]);
+    }
+    const selected = selectMediaStreams(streams, quality);
+    if (!selected.length || !selected.some(stream => stream.hasVideo)) {
+      throw new Error(pageData.playabilityReason || 'Không tìm được luồng video chất lượng này. Hãy thử chọn độ phân giải khác.');
+    }
 
     const response = await sendRuntimeMessage({
-      action: 'start-native-download',
-      pageUrl: pageData.canonicalUrl || pageData.pageUrl,
-      title: pageData.title,
-      quality,
-      exportFormat
+      action: 'start-media-transfer',
+      capture: {
+        pageUrl: pageData.canonicalUrl || pageData.pageUrl,
+        title: pageData.title,
+        exportFormat,
+        streams: selected
+      }
     });
     if (!response?.ok) throw new Error(response?.error || 'Không thể bắt đầu tải media.');
-    mediaButton.textContent = 'Đang tải…';
-    setStatus(`Đang tải video ${quality}p chất lượng cao đầy đủ âm thanh… Bạn có thể đóng popup.`, 'running');
+    mediaButton.textContent = 'Đang gửi…';
+    setStatus(`Đang tải video ${quality}p qua trình duyệt sang app… Bạn có thể đóng popup.`, 'running');
     startTransferPolling();
   } catch (error) {
     mediaButton.disabled = false;
