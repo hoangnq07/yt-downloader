@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"fmt"
 	"os"
 
 	"github.com/wailsapp/wails/v2"
@@ -16,6 +17,19 @@ func main() {
 	if isBrowserNativeHostInvocation(os.Args[1:]) {
 		_ = runBrowserBridgeNativeHost(os.Stdin, os.Stdout)
 		return
+	}
+
+	for _, arg := range os.Args[1:] {
+		if arg == "--install-browser-bridge" {
+			app := NewApp()
+			status, err := app.InstallBrowserBridge()
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "Lỗi cài đặt browser bridge:", err)
+				os.Exit(1)
+			}
+			fmt.Printf("Browser bridge sẵn sàng tại: %s\n", status.ExtensionPath)
+			return
+		}
 	}
 
 	app := NewApp()

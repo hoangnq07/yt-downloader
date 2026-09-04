@@ -117,6 +117,11 @@ func existingFile(path string) string {
 
 func (b *BinaryManager) refreshPaths() {
 	var ytdlpPath, ffmpegPath, ffprobePath string
+
+	if found, err := exec.LookPath("yt-dlp"); err == nil && found != "" {
+		ytdlpPath = found
+	}
+
 	for _, directory := range b.candidateBinDirectories() {
 		if ytdlpPath == "" {
 			ytdlpPath = existingFile(filepath.Join(directory, "yt-dlp.exe"))
@@ -187,6 +192,9 @@ func (b *BinaryManager) BuildArgs(baseArgs ...string) []string {
 	if ffmpegDir := b.GetFfmpegDir(); ffmpegDir != "" {
 		args = append(args, "--ffmpeg-location", ffmpegDir)
 	}
+	if nodePath, err := exec.LookPath("node"); err == nil && nodePath != "" {
+		args = append(args, "--js-runtimes", fmt.Sprintf("node:%s", nodePath), "--extractor-args", "youtube:player_client=tv_simply")
+	}
 	return append(args, baseArgs...)
 }
 
@@ -207,7 +215,7 @@ func commandOutput(ctx context.Context, executable string, args ...string) (stri
 
 func validateYtdlp(ctx context.Context, executable string) bool {
 	info, err := os.Stat(executable)
-	if err != nil || !info.Mode().IsRegular() || info.Size() < 100*1024 {
+	if err != nil || !info.Mode().IsRegular() || info.Size() < 10*1024 {
 		return false
 	}
 	output, err := commandOutput(ctx, executable, "--ignore-config", "--version")

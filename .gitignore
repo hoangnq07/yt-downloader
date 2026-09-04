@@ -16,3 +16,13 @@ build/windows/installer/tmp/
 
 # Logs
 *.log
+
+# Caches
+.go-build-cache/
+.go-test-cache/
+
+# Chrome Extension runtime metadata
+browser-extension/_metadata/
+
+# Experiments and reference repositories
+experiments/

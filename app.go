@@ -89,6 +89,63 @@ func NewApp() *App {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	// Refresh the unpacked extension and native-host registration on every app
+	// start. This repairs missing registry keys and stale paths left by dev builds
+	// or by moving/updating the executable.
+	_, _ = a.InstallBrowserBridge()
+	cleanupStaleBridgeCaptures()
+	go a.watchBridgeAndHistory()
+}
+
+func (a *App) watchBridgeAndHistory() {
+	ticker := time.NewTicker(400 * time.Millisecond)
+	defer ticker.Stop()
+
+	var lastHistoryModTime time.Time
+	if stat, err := os.Stat(a.storage.historyFile); err == nil {
+		lastHistoryModTime = stat.ModTime()
+	}
+
+	bridgeTaskPath := activeBridgeTaskPath()
+	var lastBridgeTaskID string
+	var lastBridgeStatus string
+	var lastBridgePercent float64
+
+	for {
+		select {
+		case <-a.ctx.Done():
+			return
+		case <-ticker.C:
+			// 1. Sync history.json modifications with frontend
+			if stat, err := os.Stat(a.storage.historyFile); err == nil {
+				if stat.ModTime().After(lastHistoryModTime) {
+					lastHistoryModTime = stat.ModTime()
+					if a.ctx != nil {
+						runtime.EventsEmit(a.ctx, "history-updated")
+					}
+				}
+			}
+
+			// 2. Sync active bridge transfer task with frontend queue
+			data, err := os.ReadFile(bridgeTaskPath)
+			if err == nil && len(data) > 0 {
+				var task DownloadTask
+				if json.Unmarshal(data, &task) == nil && task.ID != "" {
+					if task.ID != lastBridgeTaskID || task.Status != lastBridgeStatus || task.Percent != lastBridgePercent {
+						lastBridgeTaskID = task.ID
+						lastBridgeStatus = task.Status
+						lastBridgePercent = task.Percent
+						a.emitTaskUpdate(&task)
+					}
+					if task.Status == "completed" || task.Status == "error" || task.Status == "cancelled" {
+						lastBridgeTaskID = ""
+						lastBridgeStatus = ""
+						lastBridgePercent = 0
+					}
+				}
+			}
+		}
+	}
 }
 
 func (a *App) appContext() context.Context {
@@ -785,6 +842,20 @@ func (a *App) CancelDownloadTask(taskID string) bool {
 		}
 		return true
 	}
+
+	// Support cancelling active browser bridge task from App UI
+	bridgeTaskPath := activeBridgeTaskPath()
+	if data, err := os.ReadFile(bridgeTaskPath); err == nil && len(data) > 0 {
+		var task DownloadTask
+		if json.Unmarshal(data, &task) == nil && task.ID == taskID {
+			task.Status = "cancelled"
+			task.Error = "Đã hủy bởi người dùng trên ứng dụng"
+			_ = os.Remove(bridgeTaskPath)
+			a.emitTaskUpdate(&task)
+			return true
+		}
+	}
+
 	return false
 }
 

@@ -42,7 +42,7 @@
     },
     "condition": {
       "urlFilter": "||googlevideo.com/videoplayback",
-      "resourceTypes": ["xmlhttprequest", "media"]
+      "resourceTypes": ["main_frame", "sub_frame", "xmlhttprequest", "media", "other"]
     }
   }
 ]

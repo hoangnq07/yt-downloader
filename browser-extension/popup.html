@@ -42,46 +42,34 @@
           <button id="btnDirectVideo" class="btn-primary" disabled>Tải MP4</button>
         </div>
       </div>
-
-      <div class="control-group" style="margin-top: 8px;">
-        <label class="control-label">Audio gốc (Nhạc / Âm thanh):</label>
-        <div class="control-row">
-          <select id="directAudioFormat" aria-label="Định dạng audio trực tiếp">
-            <option value="m4a">M4A (AAC 128kbps - Tương thích cao)</option>
-            <option value="opus">Opus / WebM (160kbps - Âm thanh cao)</option>
-          </select>
-          <button id="btnDirectAudio" class="btn-primary" disabled>Tải Audio</button>
-        </div>
-      </div>
-      <p class="bridge-note">YouTube.js giải mã trực tiếp link video/audio của YouTube và tải thẳng về máy qua trình duyệt.</p>
+      <p class="bridge-note">Video có sẵn cả hình và tiếng được trình duyệt tải trực tiếp vào thư mục Downloads của bạn.</p>
     </section>
 
-    <!-- Card 2: Ghép 1080p/4K & Chuyển MP3 bằng App (Browser Bridge) -->
+    <!-- Card 2: Ghép 1080p/4K bằng App (Browser Bridge) -->
     <section class="asset-card bridge-card">
       <div class="asset-heading">
-        <strong>🚀 Ghép 1080p/4K & Chuyển MP3 bằng App</strong>
+        <strong>🚀 Ghép Video Đỉnh Cao 1080p / 2K / 4K (FFmpeg)</strong>
         <span id="mediaStreamCount">Đang tìm…</span>
       </div>
       <div class="control-row">
-        <select id="mediaType" aria-label="Loại media gửi app">
-          <option value="video">Video MP4 (1080p / 2K / 4K)</option>
-          <option value="audio">Audio → MP3 (FFmpeg)</option>
-        </select>
         <select id="mediaQuality" aria-label="Chất lượng video">
-          <option value="best">Tốt nhất có sẵn</option>
+          <option value="best">Tốt nhất có sẵn (1080p / 2K / 4K)</option>
           <option value="2160">Tối đa 2160p (4K)</option>
           <option value="1440">Tối đa 1440p (2K)</option>
           <option value="1080">Tối đa 1080p (Full HD)</option>
-          <option value="720">Tối đa 720p</option>
+          <option value="720">Tối đa 720p HD</option>
           <option value="480">Tối đa 480p</option>
           <option value="360">Tối đa 360p</option>
         </select>
-        <button id="sendMediaToApp" disabled>Gửi video</button>
+        <button id="sendMediaToApp" disabled>Ghép Video</button>
       </div>
-      <div class="transfer-progress" id="transferProgress" hidden>
-        <div id="transferProgressBar"></div>
+      <div class="transfer-action-row" id="transferActionRow" hidden>
+        <div class="transfer-progress" id="transferProgress" style="flex: 1; margin: 0;">
+          <div id="transferProgressBar"></div>
+        </div>
+        <button type="button" id="btnAbortTransfer" class="btn-cancel">Hủy tải</button>
       </div>
-      <p class="bridge-note">Gửi media sang app YT Downloader Pro để ghép luồng video + audio độ nét cao hoặc chuyển sang MP3.</p>
+      <p class="bridge-note" id="bridgeNote">Tải song song luồng Video nét cao và Audio chất lượng cao qua trình duyệt, sau đó App dùng FFmpeg ghép lại chuẩn lossless.</p>
     </section>
 
     <section class="asset-card">
@@ -128,6 +116,10 @@
 
     <p class="savior-hint">Chỉ tải nội dung bạn sở hữu hoặc được phép tải.</p>
     <p class="status" id="status" role="status" aria-live="polite"></p>
+    <div style="text-align: center; margin-top: 6px;">
+      <button id="btnToggleLog" type="button" style="font-size: 11px; opacity: 0.75; background: none; border: none; cursor: pointer; color: inherit; text-decoration: underline;">Xem nhật ký Bridge (Log)</button>
+    </div>
+    <div id="bridgeLogBox" hidden style="max-height: 120px; overflow-y: auto; background: rgba(0,0,0,0.25); border-radius: 6px; padding: 6px; font-family: monospace; font-size: 10px; margin-top: 6px; white-space: pre-wrap; word-break: break-all; text-align: left;"></div>
   </main>
   <iframe id="youtubeJsSandbox" src="sandbox.html" hidden title=""></iframe>
   <script src="popup.bundle.js"></script>

@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const browserBridgeUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
@@ -132,7 +133,140 @@ func (a *App) executeBrowserBridgeTask(task *DownloadTask, opts DownloadOptions)
 	_ = os.Remove(filepath.Join(browserCaptureDir(), capture.ID+".json"))
 }
 
+func exportBrowserAudioCapture(capture BrowserBridgeCapture, format string) (string, error) {
+	format = normalizeBrowserExportFormat(format)
+	if format == "" {
+		return "", errors.New("định dạng audio xuất không hợp lệ")
+	}
+	manager := NewBinaryManager()
+	ffmpegPath := manager.GetFfmpegPath()
+	if ffmpegPath == "" {
+		return "", errors.New("không tìm thấy FFmpeg; hãy mở app và chạy bước thiết lập")
+	}
+	settings := NewStorage().LoadSettings()
+	outputDir := strings.TrimSpace(settings.DownloadPath)
+	if outputDir == "" {
+		outputDir = filepath.Join(os.Getenv("USERPROFILE"), "Downloads", "YT-Downloader")
+	}
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		return "", fmt.Errorf("không thể tạo thư mục tải: %w", err)
+	}
+	targetPath := nextAvailableMediaPath(outputDir, capture.Title, format)
+	args, _, err := browserBridgeFFmpegArgs(capture, "audio", "0", format, "", targetPath)
+	if err != nil {
+		return "", err
+	}
+	cmd := exec.Command(ffmpegPath, args...)
+	cmd.SysProcAttr = hiddenWindowAttr()
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		if format == "m4a" {
+			fallbackArgs, _, fallbackErr := browserBridgeFFmpegArgsWithOptions(capture, "audio", "0", format, "", targetPath, true)
+			if fallbackErr == nil {
+				cmdFallback := exec.Command(ffmpegPath, fallbackArgs...)
+				cmdFallback.SysProcAttr = hiddenWindowAttr()
+				var fallbackStderr bytes.Buffer
+				cmdFallback.Stderr = &fallbackStderr
+				if cmdFallback.Run() == nil {
+					return targetPath, nil
+				}
+			}
+		}
+		_ = os.Remove(targetPath)
+		detail := lastFFmpegError(stderr.String())
+		if detail == "" {
+			detail = err.Error()
+		}
+		bridgeLog("exportBrowserAudioCapture: FFmpeg lỗi: %s", detail)
+		return "", errors.New(detail)
+	}
+
+	historyItem := HistoryItem{
+		ID:        capture.ID,
+		Title:     capture.Title,
+		Channel:   "Browser Bridge",
+		Thumbnail: fmt.Sprintf("https://i.ytimg.com/vi/%s/hqdefault.jpg", capture.VideoID),
+		FilePath:  targetPath,
+		FileName:  filepath.Base(targetPath),
+		Format:    strings.ToUpper(format),
+		Quality:   "Audio",
+		Date:      time.Now().Format("02/01/2006 15:04"),
+		Status:    "completed",
+	}
+	_ = NewStorage().AddHistory(historyItem)
+	bridgeLog("exportBrowserAudioCapture: xuất audio thành công -> %s", targetPath)
+	return targetPath, nil
+}
+
+func exportBrowserVideoCapture(capture BrowserBridgeCapture, format string) (string, error) {
+	format = normalizeBrowserExportFormat(format)
+	if !isBrowserVideoExportFormat(format) {
+		format = "mp4"
+	}
+	manager := NewBinaryManager()
+	ffmpegPath := manager.GetFfmpegPath()
+	if ffmpegPath == "" {
+		bridgeLog("exportBrowserVideoCapture: không tìm thấy FFmpeg")
+		return "", errors.New("không tìm thấy FFmpeg; hãy mở app và chạy bước thiết lập")
+	}
+	settings := NewStorage().LoadSettings()
+	outputDir := strings.TrimSpace(settings.DownloadPath)
+	if outputDir == "" {
+		outputDir = filepath.Join(os.Getenv("USERPROFILE"), "Downloads", "YT-Downloader")
+	}
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		bridgeLog("exportBrowserVideoCapture: không thể tạo thư mục tải: %v", err)
+		return "", fmt.Errorf("không thể tạo thư mục tải: %w", err)
+	}
+	targetPath := nextAvailableMediaPath(outputDir, capture.Title, format)
+	args, _, err := browserBridgeFFmpegArgs(capture, "video", "best", format, "", targetPath)
+	if err != nil {
+		bridgeLog("exportBrowserVideoCapture: lỗi tạo ffmpeg args: %v", err)
+		return "", err
+	}
+	bridgeLog("exportBrowserVideoCapture: chạy FFmpeg: %s %v", ffmpegPath, args)
+	cmd := exec.Command(ffmpegPath, args...)
+	cmd.SysProcAttr = hiddenWindowAttr()
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		_ = os.Remove(targetPath)
+		detail := lastFFmpegError(stderr.String())
+		if detail == "" {
+			detail = err.Error()
+		}
+		bridgeLog("exportBrowserVideoCapture: FFmpeg lỗi: %s", detail)
+		return "", errors.New(detail)
+	}
+	bridgeLog("exportBrowserVideoCapture: ghép video thành công -> %s", targetPath)
+
+	videoStream := selectBrowserVideoStream(capture.Streams, "best", format)
+	qualityLabel := "1080p"
+	if videoStream != nil && videoStream.Height > 0 {
+		qualityLabel = fmt.Sprintf("%dp", videoStream.Height)
+	}
+	historyItem := HistoryItem{
+		ID:        capture.ID,
+		Title:     capture.Title,
+		Channel:   "Browser Bridge",
+		Thumbnail: fmt.Sprintf("https://i.ytimg.com/vi/%s/hqdefault.jpg", capture.VideoID),
+		FilePath:  targetPath,
+		FileName:  filepath.Base(targetPath),
+		Format:    strings.ToUpper(format),
+		Quality:   qualityLabel,
+		Date:      time.Now().Format("02/01/2006 15:04"),
+		Status:    "completed",
+	}
+	_ = NewStorage().AddHistory(historyItem)
+	return targetPath, nil
+}
+
 func browserBridgeFFmpegArgs(capture BrowserBridgeCapture, mediaType, quality, format, proxyURL, targetPath string) ([]string, float64, error) {
+	return browserBridgeFFmpegArgsWithOptions(capture, mediaType, quality, format, proxyURL, targetPath, false)
+}
+
+func browserBridgeFFmpegArgsWithOptions(capture BrowserBridgeCapture, mediaType, quality, format, proxyURL, targetPath string, forceTranscode bool) ([]string, float64, error) {
 	args := []string{"-hide_banner", "-loglevel", "error", "-y"}
 	duration := 0.0
 
@@ -146,7 +280,11 @@ func browserBridgeFFmpegArgs(capture BrowserBridgeCapture, mediaType, quality, f
 		args = append(args, "-vn")
 		switch format {
 		case "m4a":
-			args = append(args, "-c:a", "aac", "-b:a", "256k")
+			if !forceTranscode && audio.Container == "m4a" && (audio.MimeType == "" || strings.Contains(strings.ToLower(audio.MimeType), "mp4a")) {
+				args = append(args, "-c:a", "copy")
+			} else {
+				args = append(args, "-c:a", "aac", "-b:a", "256k")
+			}
 		case "opus":
 			args = append(args, "-c:a", "libopus", "-b:a", "192k")
 		case "flac":

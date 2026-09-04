@@ -371,7 +371,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const status = await InstallBrowserBridge();
       await refreshBrowserBridgeStatus();
-      showToast('Đã chuẩn bị YouTube Bridge Extension 3.0.1 và đăng ký native host. Bấm Reload trong trang Extensions để cập nhật.', 'success', 9000);
+      showToast('Đã chuẩn bị YouTube Bridge Extension 3.2.0 và đăng ký native host. Bấm Reload trong trang Extensions để cập nhật.', 'success', 9000);
       try {
         await OpenBrowserBridgeFolder();
       } catch (openError) {

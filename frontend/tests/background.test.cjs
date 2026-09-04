@@ -9,9 +9,30 @@ test('background service worker transfers media in bounded native chunks', async
   const runtimeListeners = [];
   const nativeMessages = [];
 
+  let storageState = {};
   const chrome = {
+    storage: {
+      local: {
+        async get(keys) {
+          const result = {};
+          for (const key of keys) {
+            if (key in storageState) result[key] = storageState[key];
+          }
+          return result;
+        },
+        async set(items) {
+          Object.assign(storageState, items);
+        },
+        async remove(keys) {
+          for (const key of (Array.isArray(keys) ? keys : [keys])) {
+            delete storageState[key];
+          }
+        }
+      }
+    },
     runtime: {
       lastError: null,
+      getPlatformInfo(cb) { if (cb) cb({ os: 'win' }); },
       onMessage: {
         addListener(listener) {
           runtimeListeners.push(listener);
@@ -54,11 +75,24 @@ test('background service worker transfers media in bounded native chunks', async
     Promise,
     setTimeout,
     clearTimeout,
+    setInterval,
+    clearInterval,
     queueMicrotask,
-    btoa
+    btoa,
+    console,
+    AbortController
   });
   vm.runInContext(source, context, { filename: 'background.js' });
   assert.equal(runtimeListeners.length, 1);
+
+  let bridgeResponse;
+  const bridgeListenerResult = runtimeListeners[0]({ action: 'check-native-bridge' }, null, response => { bridgeResponse = response; });
+  assert.equal(bridgeListenerResult, true);
+  for (let attempt = 0; attempt < 20 && !bridgeResponse; attempt += 1) {
+    await new Promise(resolve => setTimeout(resolve, 1));
+  }
+  assert.equal(bridgeResponse?.ok, true);
+  assert.equal(nativeMessages.shift()?.action, 'ping');
 
   let startResponse;
   runtimeListeners[0]({
@@ -73,7 +107,8 @@ test('background service worker transfers media in bounded native chunks', async
         hasVideo: true,
         hasAudio: true,
         contentLength: media.length
-      }]
+      }],
+      exportFormat: 'mp3'
     }
   }, null, response => { startResponse = response; });
   assert.equal(startResponse?.ok, true);
@@ -95,6 +130,7 @@ test('background service worker transfers media in bounded native chunks', async
     'transfer-stream-end',
     'transfer-finish'
   ]);
+  assert.equal(nativeMessages[0].exportFormat, 'mp3');
   const chunks = nativeMessages.filter(message => message.action === 'transfer-chunk');
   assert.ok(chunks.every(message => message.data.length < 768 * 1024));
 });

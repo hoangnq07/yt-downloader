@@ -217,7 +217,7 @@ select:disabled {
 }
 
 .transfer-progress {
-  height: 5px;
+  height: 6px;
   margin-top: 9px;
   overflow: hidden;
   border-radius: 999px;
@@ -230,6 +230,31 @@ select:disabled {
   border-radius: inherit;
   background: #ef233c;
   transition: width .2s ease;
+}
+
+.transfer-action-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 9px;
+}
+
+.btn-cancel {
+  min-height: 26px;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #dc2626;
+  color: #fff;
+  border: 1px solid #ef4444;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .15s ease;
+}
+
+.btn-cancel:hover:not(:disabled) {
+  background: #b91c1c;
 }
 
 #subtitleFormat {
