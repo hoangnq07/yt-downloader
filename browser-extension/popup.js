@@ -25,6 +25,22 @@ const sandboxFrame = document.getElementById('youtubeJsSandbox');
 let pageData = null;
 let innertubePromise = null;
 let transferPollTimer = null;
+let keepAlivePort = null;
+
+function startPopupKeepAlive() {
+  if (keepAlivePort) return;
+  try {
+    keepAlivePort = chrome.runtime.connect({ name: 'popup-keepalive' });
+    keepAlivePort.onDisconnect.addListener(() => { keepAlivePort = null; });
+  } catch (_) {}
+}
+
+function stopPopupKeepAlive() {
+  if (keepAlivePort) {
+    try { keepAlivePort.disconnect(); } catch (_) {}
+    keepAlivePort = null;
+  }
+}
 
 const sandboxPending = new Map();
 let sandboxSequence = 0;
@@ -483,6 +499,24 @@ function renderTransferStatus(transfer) {
     mediaButton.textContent = 'Ghép Video';
     if (btnDirectVideo) btnDirectVideo.disabled = false;
   }
+
+  // Sau khi hoàn tất/lỗi: giữ progress bar hiện thị 100% thêm 4 giây
+  // rồi mới ẩn, tránh popup đóng đột ngột do service worker bị suspend.
+  if (!isRunning && transfer.state !== 'idle') {
+    if (transferProgress) {
+      transferProgress.hidden = false;
+      if (transferProgressBar) {
+        transferProgressBar.style.width = transfer.state === 'completed' ? '100%' : `${percentVal}%`;
+        transferProgressBar.style.background = transfer.state === 'completed'
+          ? 'var(--color-success, #10B981)'
+          : 'var(--color-error, #EF4444)';
+      }
+      setTimeout(() => {
+        if (transferProgress) transferProgress.hidden = true;
+        if (transferProgressBar) transferProgressBar.style.background = '';
+      }, 4000);
+    }
+  }
 }
 
 async function refreshTransferStatus() {
@@ -492,12 +526,16 @@ async function refreshTransferStatus() {
     if (transfer?.state !== 'running' && transferPollTimer) {
       clearInterval(transferPollTimer);
       transferPollTimer = null;
+      // Giữ keepAlive thêm 4 giây cho UI hiển thị trạng thái cuối,
+      // sau đó mới để service worker có thể suspend bình thường.
+      setTimeout(stopPopupKeepAlive, 4000);
     }
   } catch (_) {}
 }
 
 function startTransferPolling() {
   if (!transferPollTimer) transferPollTimer = setInterval(refreshTransferStatus, 500);
+  startPopupKeepAlive();
   void refreshTransferStatus();
 }
 

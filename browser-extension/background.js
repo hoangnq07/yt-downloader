@@ -53,6 +53,13 @@ async function appendBridgeLog(level, message, data = null) {
   }
 }
 
+// Giữ service worker sống khi popup mở port keepalive
+chrome.runtime.onConnect.addListener(port => {
+  if (port.name === 'popup-keepalive') {
+    port.onDisconnect.addListener(() => {});
+  }
+});
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.action === 'get-transfer-status') {
     sendResponse(transferStatus);
@@ -227,7 +234,9 @@ async function runNativeDownloadFlow({ pageUrl, title, quality, exportFormat = '
     if (bridge) {
       bridge.disconnect();
     }
-    stopKeepAlive();
+    // Giữ service worker sống thêm 5 giây sau khi hoàn tất để popup
+    // kịp nhận trạng thái cuối trước khi Chrome suspend worker.
+    setTimeout(stopKeepAlive, 5000);
   }
 }
 

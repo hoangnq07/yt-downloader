@@ -39460,6 +39460,26 @@ ${getNsigProcessorFn(eval_args.n, eval_args.sp, eval_args.sig)}`;
   var pageData = null;
   var innertubePromise = null;
   var transferPollTimer = null;
+  var keepAlivePort = null;
+  function startPopupKeepAlive() {
+    if (keepAlivePort) return;
+    try {
+      keepAlivePort = chrome.runtime.connect({ name: "popup-keepalive" });
+      keepAlivePort.onDisconnect.addListener(() => {
+        keepAlivePort = null;
+      });
+    } catch (_) {
+    }
+  }
+  function stopPopupKeepAlive() {
+    if (keepAlivePort) {
+      try {
+        keepAlivePort.disconnect();
+      } catch (_) {
+      }
+      keepAlivePort = null;
+    }
+  }
   var sandboxPending = /* @__PURE__ */ new Map();
   var sandboxSequence = 0;
   var sandboxReady = new Promise((resolve) => {
@@ -39808,6 +39828,19 @@ ${getNsigProcessorFn(eval_args.n, eval_args.sp, eval_args.sig)}`;
       mediaButton.textContent = "Gh\xE9p Video";
       if (btnDirectVideo) btnDirectVideo.disabled = false;
     }
+    if (!isRunning && transfer.state !== "idle") {
+      if (transferProgress) {
+        transferProgress.hidden = false;
+        if (transferProgressBar) {
+          transferProgressBar.style.width = transfer.state === "completed" ? "100%" : `${percentVal}%`;
+          transferProgressBar.style.background = transfer.state === "completed" ? "var(--color-success, #10B981)" : "var(--color-error, #EF4444)";
+        }
+        setTimeout(() => {
+          if (transferProgress) transferProgress.hidden = true;
+          if (transferProgressBar) transferProgressBar.style.background = "";
+        }, 4e3);
+      }
+    }
   }
   async function refreshTransferStatus() {
     try {
@@ -39816,12 +39849,14 @@ ${getNsigProcessorFn(eval_args.n, eval_args.sp, eval_args.sig)}`;
       if (transfer?.state !== "running" && transferPollTimer) {
         clearInterval(transferPollTimer);
         transferPollTimer = null;
+        setTimeout(stopPopupKeepAlive, 4e3);
       }
     } catch (_) {
     }
   }
   function startTransferPolling() {
     if (!transferPollTimer) transferPollTimer = setInterval(refreshTransferStatus, 500);
+    startPopupKeepAlive();
     void refreshTransferStatus();
   }
   function updateMediaModeUI() {
