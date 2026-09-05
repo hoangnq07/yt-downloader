@@ -22,6 +22,6 @@ func hiddenWindowAttr() *syscall.SysProcAttr {
 func detachedWindowAttr() *syscall.SysProcAttr {
 	return &syscall.SysProcAttr{
 		HideWindow:    true,
-		CreationFlags: CREATE_NO_WINDOW | CREATE_BREAKAWAY_FROM_JOB,
+		CreationFlags: CREATE_NO_WINDOW,
 	}
 }

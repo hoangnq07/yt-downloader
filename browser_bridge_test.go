@@ -40,8 +40,8 @@ func TestEmbeddedBridgeExtensionIdentityAndCapabilities(t *testing.T) {
 		t.Fatalf("extension ID = %s, want %s", extensionID, browserBridgeExtensionID)
 	}
 
-	if manifest.Version != "3.2.0" {
-		t.Fatalf("extension version = %s, want 3.2.0", manifest.Version)
+	if manifest.Version != "3.2.2" {
+		t.Fatalf("extension version = %s, want 3.2.2", manifest.Version)
 	}
 	permissions := strings.Join(manifest.Permissions, ",")
 	if !strings.Contains(permissions, "downloads") || !strings.Contains(permissions, "scripting") || !strings.Contains(permissions, "nativeMessaging") || !strings.Contains(permissions, "declarativeNetRequestWithHostAccess") {
@@ -402,6 +402,29 @@ func TestBrowserNativeChunkTransferCreatesLocalMedia(t *testing.T) {
 	joined := strings.Join(args, " ")
 	if strings.Contains(joined, "-http_proxy") || !strings.Contains(joined, capture.Streams[0].LocalPath) {
 		t.Fatalf("local capture should bypass proxy: %s", joined)
+	}
+}
+
+func TestBrowserNativeRejectsIncompleteStream(t *testing.T) {
+	t.Setenv("APPDATA", t.TempDir())
+	state := &browserNativeHostState{Transfers: make(map[string]*browserTransferState)}
+	started := state.startTransfer(browserBridgeNativeMessage{
+		PageURL: "https://www.youtube.com/watch?v=oLuhZHUEIKE",
+		Streams: []BrowserBridgeStream{{URL: "https://test.googlevideo.com/videoplayback?itag=401", Itag: 401, HasVideo: true, Container: "mp4", ContentLength: 100}},
+	})
+	if !started.OK {
+		t.Fatal(started.Error)
+	}
+	chunk := state.writeTransferChunk(browserBridgeNativeMessage{CaptureID: started.CaptureID, StreamIndex: 0, Data: base64.StdEncoding.EncodeToString([]byte("partial"))})
+	if !chunk.OK {
+		t.Fatal(chunk.Error)
+	}
+	finished := state.finishTransferStream(browserBridgeNativeMessage{CaptureID: started.CaptureID, StreamIndex: 0})
+	if finished.OK || !strings.Contains(finished.Error, "7/100") {
+		t.Fatalf("incomplete stream accepted: %+v", finished)
+	}
+	if len(state.Transfers) != 0 {
+		t.Fatal("incomplete transfer was not cleaned up")
 	}
 }
 

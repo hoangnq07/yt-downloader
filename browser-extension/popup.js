@@ -87,15 +87,18 @@ Platform.shim.eval = async (data, env) => {
 
 async function getInnertube(visitorData = '', poToken = '') {
   const vd = visitorData || pageData?.visitorData || '';
+  const pot = poToken || pageData?.poToken || '';
   if (!innertubePromise) {
-    innertubePromise = Innertube.create({
+    const config = {
       lang: 'vi',
-      client_type: ClientType.IOS,
+      client_type: ClientType.TV_SIMPLY,
       visitor_data: vd,
       generate_session_locally: true,
       enable_session_cache: false,
       fetch: (input, init) => fetch(input, init)
-    }).catch(error => {
+    };
+    if (pot) config.po_token = pot;
+    innertubePromise = Innertube.create(config).catch(error => {
       innertubePromise = null;
       throw error;
     });
@@ -401,45 +404,74 @@ function normalizeYouTubeJsFormat(format, url, overrideAudioOnly = false) {
 async function getYouTubeJsStreams(videoId, requestedQuality, requestedType = 'video') {
   const youtube = await getInnertube();
   const candidates = [];
+  const pot = pageData?.poToken || '';
 
-  // 1. Lấy luồng Video chất lượng cao từ IOS (có sẵn 1080p, 1440p 2K, 2160p 4K với URL trực tiếp)
+  // 1. Lấy luồng TV_SIMPLY (hỗ trợ 1080p+, 720p, audio AAC itag 140 không bị cắt 37.5MB khi có decipher + pot)
   try {
-    const iosInfo = await youtube.getBasicInfo(videoId, { client: 'IOS' });
-    const iosFormats = [
-      ...(iosInfo.streaming_data?.formats || []),
-      ...(iosInfo.streaming_data?.adaptive_formats || [])
+    const options = pot ? { client: 'TV_SIMPLY', po_token: pot } : { client: 'TV_SIMPLY' };
+    const tvInfo = await youtube.getBasicInfo(videoId, options);
+    const tvFormats = [
+      ...(tvInfo.streaming_data?.formats || []),
+      ...(tvInfo.streaming_data?.adaptive_formats || [])
     ];
-    for (const format of iosFormats) {
-      if (format.has_video && format.url) {
-        candidates.push(normalizeYouTubeJsFormat(format, format.url, false));
+    for (const format of tvFormats) {
+      if (!format.url && typeof format.decipher !== 'function') continue;
+      let url = format.url || '';
+      if (typeof format.decipher === 'function') {
+        try {
+          url = await format.decipher(youtube.session.player);
+        } catch (_) {}
       }
+      if (!url) continue;
+      if (pot && !url.includes('&pot=')) {
+        url += '&pot=' + encodeURIComponent(pot);
+      }
+      candidates.push(normalizeYouTubeJsFormat(format, url, false));
     }
   } catch (err) {
-    console.warn('[YouTube.js] Lấy video IOS thất bại:', err);
+    console.warn('[YouTube.js] Lấy TV_SIMPLY thất bại:', err);
   }
 
-  // 2. Lấy luồng âm thanh đảm bảo không bị chặn 403:
-  // Luồng progressive itag 18 (từ ANDROID) chứa đầy đủ audio track AAC (mp4a), tải 100% không bị giới hạn 1MB hay 403.
-  try {
-    const androidInfo = await youtube.getBasicInfo(videoId, { client: 'ANDROID' });
-    const androidFormats = [
-      ...(androidInfo.streaming_data?.formats || []),
-      ...(androidInfo.streaming_data?.adaptive_formats || [])
-    ];
-    const itag18 = androidFormats.find(f => Number(f.itag) === 18 && f.url);
-    if (itag18) {
-      candidates.push(normalizeYouTubeJsFormat(itag18, itag18.url, true));
-    } else {
-      // Dự phòng format có audio khác từ ANDROID nếu không có itag 18
-      for (const f of androidFormats) {
-        if (f.has_audio && f.url) {
-          candidates.push(normalizeYouTubeJsFormat(f, f.url, true));
-          break;
+  // 2. Dự phòng: Nếu TV_SIMPLY không có video, thử lấy IOS
+  if (!candidates.some(c => c.hasVideo)) {
+    try {
+      const iosInfo = await youtube.getBasicInfo(videoId, { client: 'IOS' });
+      const iosFormats = [
+        ...(iosInfo.streaming_data?.formats || []),
+        ...(iosInfo.streaming_data?.adaptive_formats || [])
+      ];
+      for (const format of iosFormats) {
+        if (format.has_video && format.url) {
+          candidates.push(normalizeYouTubeJsFormat(format, format.url, false));
         }
       }
+    } catch (err) {
+      console.warn('[YouTube.js] Lấy video IOS thất bại:', err);
     }
-  } catch (err) {
-    console.warn('[YouTube.js] Lấy audio ANDROID thất bại:', err);
+  }
+
+  // 3. Dự phòng: Nếu chưa có luồng Audio, dùng audio AAC từ ANDROID (itag 18)
+  if (!candidates.some(c => c.hasAudio)) {
+    try {
+      const androidInfo = await youtube.getBasicInfo(videoId, { client: 'ANDROID' });
+      const androidFormats = [
+        ...(androidInfo.streaming_data?.formats || []),
+        ...(androidInfo.streaming_data?.adaptive_formats || [])
+      ];
+      const itag18 = androidFormats.find(f => Number(f.itag) === 18 && f.url);
+      if (itag18) {
+        candidates.push(normalizeYouTubeJsFormat(itag18, itag18.url, true));
+      } else {
+        for (const f of androidFormats) {
+          if (f.has_audio && f.url) {
+            candidates.push(normalizeYouTubeJsFormat(f, f.url, true));
+            break;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[YouTube.js] Lấy audio ANDROID thất bại:', err);
+    }
   }
 
   return candidates;
@@ -900,19 +932,20 @@ mediaButton.addEventListener('click', async () => {
   try {
     const quality = mediaQuality.value || '1080';
     const exportFormat = 'mp4';
-    setStatus(`Đang chuẩn bị luồng video ${quality}p từ trình duyệt…`, 'running');
+    setStatus(`Đang lấy luồng video ${quality}p qua trình duyệt…`, 'running');
 
+    const tab = await getActiveTab();
     let streams = uniqueStreams(pageData.mediaStreams || []);
     const directSelection = selectMediaStreams(streams, quality);
     const hasVideo = directSelection.some(stream => stream.hasVideo);
     const hasAudio = directSelection.some(stream => stream.hasAudio);
-    if (!hasVideo || !hasAudio) {
-      const extra = await getYouTubeJsStreams(pageData.videoId, quality, 'video').catch(() => []);
-      streams = uniqueStreams([...streams, ...extra]);
+    const needsFallback = (!hasVideo || !hasAudio);
+    if (needsFallback) {
+      streams = uniqueStreams([...streams, ...await getYouTubeJsStreams(pageData.videoId, quality, 'video')]);
     }
     const selected = selectMediaStreams(streams, quality);
-    if (!selected.length || !selected.some(stream => stream.hasVideo)) {
-      throw new Error(pageData.playabilityReason || 'Không tìm được luồng video chất lượng này. Hãy thử chọn độ phân giải khác.');
+    if (!selected.length || !selected.some(stream => stream.hasAudio || stream.hasVideo)) {
+      throw new Error(pageData.playabilityReason || 'Không tìm được luồng video/audio có thể tải.');
     }
 
     const response = await sendRuntimeMessage({
@@ -920,13 +953,14 @@ mediaButton.addEventListener('click', async () => {
       capture: {
         pageUrl: pageData.canonicalUrl || pageData.pageUrl,
         title: pageData.title,
+        streams: selected,
         exportFormat,
-        streams: selected
+        tabId: tab?.id
       }
     });
-    if (!response?.ok) throw new Error(response?.error || 'Không thể bắt đầu tải media.');
+    if (!response?.ok) throw new Error(response?.error || 'Không thể bắt đầu gửi media.');
     mediaButton.textContent = 'Đang gửi…';
-    setStatus(`Đang tải video ${quality}p qua trình duyệt sang app… Bạn có thể đóng popup.`, 'running');
+    setStatus(`Đang tải video ${quality}p bằng kết nối trình duyệt và gửi sang App ghép… Bạn có thể đóng popup.`, 'running');
     startTransferPolling();
   } catch (error) {
     mediaButton.disabled = false;

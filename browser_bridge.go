@@ -790,6 +790,12 @@ func (state *browserNativeHostState) finishTransferStream(message browserBridgeN
 	if file == nil || transfer.Received[message.StreamIndex] == 0 {
 		return browserBridgeNativeResponse{Error: "stream chưa có dữ liệu"}
 	}
+	if expected := transfer.Capture.Streams[message.StreamIndex].ContentLength; expected > 0 && transfer.Received[message.StreamIndex] != expected {
+		detail := fmt.Sprintf("stream chưa đủ dữ liệu hoặc sai kích thước: nhận %d/%d bytes", transfer.Received[message.StreamIndex], expected)
+		reportActiveBridgeTaskError(message.CaptureID, detail)
+		state.cleanupTransfer(message.CaptureID)
+		return browserBridgeNativeResponse{Error: detail}
+	}
 	if err := file.Sync(); err != nil {
 		reportActiveBridgeTaskError(message.CaptureID, err.Error())
 		state.cleanupTransfer(message.CaptureID)
@@ -1013,10 +1019,18 @@ func (state *browserNativeHostState) runNativeDownload(taskID, targetURL, title,
 	}
 	args = append(args, "--merge-output-format", exportFormat)
 	args = append(args, "-o", outTemplate)
+	proxyURL, proxyErr := normalizeBrowserProxyURL(settings.BrowserProxyURL)
+	if proxyErr != nil {
+		reportActiveBridgeTaskError(taskID, proxyErr.Error())
+		return
+	}
+	if proxyURL != "" {
+		args = append(args, "--proxy", proxyURL)
+	}
 	args = manager.BuildArgs(args...)
 	args = append(args, targetURL)
 
-	bridgeLog("runNativeDownload: chạy lệnh: %s %v", ytdlpPath, args)
+	bridgeLog("runNativeDownload: yt-dlp=%s, quality=%s, format=%s, proxy=%t", ytdlpPath, quality, exportFormat, proxyURL != "")
 
 	cmd := exec.Command(ytdlpPath, args...)
 	cmd.SysProcAttr = detachedWindowAttr()
@@ -1050,6 +1064,7 @@ func (state *browserNativeHostState) runNativeDownload(taskID, targetURL, title,
 	etaRe := regexp.MustCompile(`ETA\s+([0-9:]+)`)
 	destRe := regexp.MustCompile(`\[(?:download|Merger)\]\s+Destination:\s+(.+)`)
 	mergeRe := regexp.MustCompile(`\[Merger\]\s+Merging formats into "(.+)"`)
+	alreadyRe := regexp.MustCompile(`\[download\]\s+(.+?)\s+has already been downloaded`)
 
 	var lastReport time.Time
 	var finalFilePath string
@@ -1057,6 +1072,13 @@ func (state *browserNativeHostState) runNativeDownload(taskID, targetURL, title,
 	scanner := bufio.NewScanner(stdout)
 	for scanner.Scan() {
 		line := scanner.Text()
+
+		if m := alreadyRe.FindStringSubmatch(line); len(m) > 1 {
+			cand := strings.TrimSpace(m[1])
+			if fileExists(cand) {
+				finalFilePath = cand
+			}
+		}
 
 		if m := destRe.FindStringSubmatch(line); len(m) > 1 {
 			dest := strings.TrimSpace(m[1])
@@ -1327,7 +1349,7 @@ func fileExists(path string) bool {
 }
 
 // findDownloadedMediaFile tìm file media trong thư mục đầu ra có tên
-// bắt đầu bằng title hoặc được sửa đổi gần đây nhất (trong vòng 5 phút).
+// khớp với title của video hoặc được sửa đổi gần đây nhất.
 func findDownloadedMediaFile(outputDir, title, format string) string {
 	entries, err := os.ReadDir(outputDir)
 	if err != nil {
@@ -1338,6 +1360,16 @@ func findDownloadedMediaFile(outputDir, title, format string) string {
 	var bestModTime time.Time
 	now := time.Now()
 
+	var titleWords []string
+	for _, raw := range strings.Fields(strings.ToLower(title)) {
+		clean := strings.TrimFunc(raw, func(r rune) bool {
+			return !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || (r >= 'A' && r <= 'Z') || r > 127)
+		})
+		if len(clean) >= 3 {
+			titleWords = append(titleWords, clean)
+		}
+	}
+
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
@@ -1346,15 +1378,28 @@ func findDownloadedMediaFile(outputDir, title, format string) string {
 		if !strings.HasSuffix(strings.ToLower(name), ext) {
 			continue
 		}
+		lowerName := strings.ToLower(name)
+
+		// Ưu tiên khớp tên nếu chứa các từ khóa chính của tiêu đề video
+		if len(titleWords) > 0 {
+			allMatch := true
+			for _, w := range titleWords {
+				if !strings.Contains(lowerName, w) {
+					allMatch = false
+					break
+				}
+			}
+			if allMatch {
+				return filepath.Join(outputDir, name)
+			}
+		}
+
 		info, err := entry.Info()
 		if err != nil {
 			continue
 		}
-		// Chỉ xét file được sửa đổi trong vòng 5 phút qua
-		if now.Sub(info.ModTime()) > 5*time.Minute {
-			continue
-		}
-		if info.ModTime().After(bestModTime) {
+		// Dự phòng: xét file được sửa đổi gần đây
+		if now.Sub(info.ModTime()) <= 15*time.Minute && info.ModTime().After(bestModTime) {
 			bestModTime = info.ModTime()
 			bestMatch = filepath.Join(outputDir, name)
 		}

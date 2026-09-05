@@ -39522,15 +39522,18 @@ ${getNsigProcessorFn(eval_args.n, eval_args.sp, eval_args.sig)}`;
   };
   async function getInnertube(visitorData = "", poToken = "") {
     const vd = visitorData || pageData?.visitorData || "";
+    const pot = poToken || pageData?.poToken || "";
     if (!innertubePromise) {
-      innertubePromise = Innertube.create({
+      const config = {
         lang: "vi",
-        client_type: ClientType.IOS,
+        client_type: ClientType.TV_SIMPLY,
         visitor_data: vd,
         generate_session_locally: true,
         enable_session_cache: false,
         fetch: (input, init) => fetch(input, init)
-      }).catch((error2) => {
+      };
+      if (pot) config.po_token = pot;
+      innertubePromise = Innertube.create(config).catch((error2) => {
         innertubePromise = null;
         throw error2;
       });
@@ -39794,39 +39797,69 @@ ${getNsigProcessorFn(eval_args.n, eval_args.sp, eval_args.sig)}`;
   async function getYouTubeJsStreams(videoId, requestedQuality, requestedType = "video") {
     const youtube = await getInnertube();
     const candidates = [];
+    const pot = pageData?.poToken || "";
     try {
-      const iosInfo = await youtube.getBasicInfo(videoId, { client: "IOS" });
-      const iosFormats = [
-        ...iosInfo.streaming_data?.formats || [],
-        ...iosInfo.streaming_data?.adaptive_formats || []
+      const options = pot ? { client: "TV_SIMPLY", po_token: pot } : { client: "TV_SIMPLY" };
+      const tvInfo = await youtube.getBasicInfo(videoId, options);
+      const tvFormats = [
+        ...tvInfo.streaming_data?.formats || [],
+        ...tvInfo.streaming_data?.adaptive_formats || []
       ];
-      for (const format of iosFormats) {
-        if (format.has_video && format.url) {
-          candidates.push(normalizeYouTubeJsFormat(format, format.url, false));
-        }
-      }
-    } catch (err2) {
-      console.warn("[YouTube.js] L\u1EA5y video IOS th\u1EA5t b\u1EA1i:", err2);
-    }
-    try {
-      const androidInfo = await youtube.getBasicInfo(videoId, { client: "ANDROID" });
-      const androidFormats = [
-        ...androidInfo.streaming_data?.formats || [],
-        ...androidInfo.streaming_data?.adaptive_formats || []
-      ];
-      const itag18 = androidFormats.find((f) => Number(f.itag) === 18 && f.url);
-      if (itag18) {
-        candidates.push(normalizeYouTubeJsFormat(itag18, itag18.url, true));
-      } else {
-        for (const f of androidFormats) {
-          if (f.has_audio && f.url) {
-            candidates.push(normalizeYouTubeJsFormat(f, f.url, true));
-            break;
+      for (const format of tvFormats) {
+        if (!format.url && typeof format.decipher !== "function") continue;
+        let url = format.url || "";
+        if (typeof format.decipher === "function") {
+          try {
+            url = await format.decipher(youtube.session.player);
+          } catch (_) {
           }
         }
+        if (!url) continue;
+        if (pot && !url.includes("&pot=")) {
+          url += "&pot=" + encodeURIComponent(pot);
+        }
+        candidates.push(normalizeYouTubeJsFormat(format, url, false));
       }
     } catch (err2) {
-      console.warn("[YouTube.js] L\u1EA5y audio ANDROID th\u1EA5t b\u1EA1i:", err2);
+      console.warn("[YouTube.js] L\u1EA5y TV_SIMPLY th\u1EA5t b\u1EA1i:", err2);
+    }
+    if (!candidates.some((c) => c.hasVideo)) {
+      try {
+        const iosInfo = await youtube.getBasicInfo(videoId, { client: "IOS" });
+        const iosFormats = [
+          ...iosInfo.streaming_data?.formats || [],
+          ...iosInfo.streaming_data?.adaptive_formats || []
+        ];
+        for (const format of iosFormats) {
+          if (format.has_video && format.url) {
+            candidates.push(normalizeYouTubeJsFormat(format, format.url, false));
+          }
+        }
+      } catch (err2) {
+        console.warn("[YouTube.js] L\u1EA5y video IOS th\u1EA5t b\u1EA1i:", err2);
+      }
+    }
+    if (!candidates.some((c) => c.hasAudio)) {
+      try {
+        const androidInfo = await youtube.getBasicInfo(videoId, { client: "ANDROID" });
+        const androidFormats = [
+          ...androidInfo.streaming_data?.formats || [],
+          ...androidInfo.streaming_data?.adaptive_formats || []
+        ];
+        const itag18 = androidFormats.find((f) => Number(f.itag) === 18 && f.url);
+        if (itag18) {
+          candidates.push(normalizeYouTubeJsFormat(itag18, itag18.url, true));
+        } else {
+          for (const f of androidFormats) {
+            if (f.has_audio && f.url) {
+              candidates.push(normalizeYouTubeJsFormat(f, f.url, true));
+              break;
+            }
+          }
+        }
+      } catch (err2) {
+        console.warn("[YouTube.js] L\u1EA5y audio ANDROID th\u1EA5t b\u1EA1i:", err2);
+      }
     }
     return candidates;
   }
@@ -40216,31 +40249,33 @@ ${body}`;
     try {
       const quality = mediaQuality.value || "1080";
       const exportFormat = "mp4";
-      setStatus(`\u0110ang chu\u1EA9n b\u1ECB lu\u1ED3ng video ${quality}p t\u1EEB tr\xECnh duy\u1EC7t\u2026`, "running");
+      setStatus(`\u0110ang l\u1EA5y lu\u1ED3ng video ${quality}p qua tr\xECnh duy\u1EC7t\u2026`, "running");
+      const tab = await getActiveTab();
       let streams = uniqueStreams(pageData.mediaStreams || []);
       const directSelection = selectMediaStreams(streams, quality);
       const hasVideo = directSelection.some((stream) => stream.hasVideo);
       const hasAudio = directSelection.some((stream) => stream.hasAudio);
-      if (!hasVideo || !hasAudio) {
-        const extra = await getYouTubeJsStreams(pageData.videoId, quality, "video").catch(() => []);
-        streams = uniqueStreams([...streams, ...extra]);
+      const needsFallback = !hasVideo || !hasAudio;
+      if (needsFallback) {
+        streams = uniqueStreams([...streams, ...await getYouTubeJsStreams(pageData.videoId, quality, "video")]);
       }
       const selected = selectMediaStreams(streams, quality);
-      if (!selected.length || !selected.some((stream) => stream.hasVideo)) {
-        throw new Error(pageData.playabilityReason || "Kh\xF4ng t\xECm \u0111\u01B0\u1EE3c lu\u1ED3ng video ch\u1EA5t l\u01B0\u1EE3ng n\xE0y. H\xE3y th\u1EED ch\u1ECDn \u0111\u1ED9 ph\xE2n gi\u1EA3i kh\xE1c.");
+      if (!selected.length || !selected.some((stream) => stream.hasAudio || stream.hasVideo)) {
+        throw new Error(pageData.playabilityReason || "Kh\xF4ng t\xECm \u0111\u01B0\u1EE3c lu\u1ED3ng video/audio c\xF3 th\u1EC3 t\u1EA3i.");
       }
       const response = await sendRuntimeMessage({
         action: "start-media-transfer",
         capture: {
           pageUrl: pageData.canonicalUrl || pageData.pageUrl,
           title: pageData.title,
+          streams: selected,
           exportFormat,
-          streams: selected
+          tabId: tab?.id
         }
       });
-      if (!response?.ok) throw new Error(response?.error || "Kh\xF4ng th\u1EC3 b\u1EAFt \u0111\u1EA7u t\u1EA3i media.");
+      if (!response?.ok) throw new Error(response?.error || "Kh\xF4ng th\u1EC3 b\u1EAFt \u0111\u1EA7u g\u1EEDi media.");
       mediaButton.textContent = "\u0110ang g\u1EEDi\u2026";
-      setStatus(`\u0110ang t\u1EA3i video ${quality}p qua tr\xECnh duy\u1EC7t sang app\u2026 B\u1EA1n c\xF3 th\u1EC3 \u0111\xF3ng popup.`, "running");
+      setStatus(`\u0110ang t\u1EA3i video ${quality}p b\u1EB1ng k\u1EBFt n\u1ED1i tr\xECnh duy\u1EC7t v\xE0 g\u1EEDi sang App gh\xE9p\u2026 B\u1EA1n c\xF3 th\u1EC3 \u0111\xF3ng popup.`, "running");
       startTransferPolling();
     } catch (error2) {
       mediaButton.disabled = false;

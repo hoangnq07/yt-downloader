@@ -16,9 +16,9 @@ Phiên bản chính sử dụng Wails v2, Go và Vite.
 
 ## YouTube Bridge Extension
 
-Extension dùng chính kết nối, VPN và phiên YouTube của tab đang mở để tải media, sau đó truyền file cục bộ
-qua Native Messaging cho app ghép bằng FFmpeg. Nếu player trong trang không cung cấp URL trực tiếp,
-extension dùng `youtubei.js` (YouTube.js) làm fallback để lấy và giải mã định dạng:
+Nút **Ghép Video** gửi URL và chất lượng đã chọn qua Native Messaging để app dùng
+yt-dlp lấy luồng hiện hành, tải hình/tiếng và ghép MP4 bằng FFmpeg. Nút tải trực tiếp,
+thumbnail, metadata và phụ đề vẫn dùng kết nối trình duyệt và `youtubei.js` (YouTube.js).
 
 - Video và audio gửi sang app, hỗ trợ chọn giới hạn chất lượng.
 - Thumbnail JPG với nhiều mức chất lượng.
@@ -29,11 +29,18 @@ extension dùng `youtubei.js` (YouTube.js) làm fallback để lấy và giải 
 2. Mở `coccoc://extensions` hoặc `chrome://extensions`.
 3. Bật chế độ dành cho nhà phát triển, chọn **Tải tiện ích đã giải nén** và chọn thư mục app vừa mở.
 4. Mở video YouTube rồi bấm extension **YT Downloader Pro Bridge**.
-5. Chọn **Video MP4** hoặc **Audio → MP3**, chọn chất lượng video nếu cần và bấm gửi sang app. Có thể đóng popup trong lúc service worker tiếp tục truyền media.
-6. Quay lại app, bấm **Nhận media**, sau đó chọn tải video hoặc audio như bình thường.
+5. Chọn giới hạn chất lượng và bấm **Ghép Video**. Có thể đóng popup trong lúc app tiếp tục tải.
+6. Video hoàn tất được lưu vào thư mục tải đã cài đặt và lịch sử của app.
 7. Thumbnail, metadata và phụ đề vẫn có thể tải trực tiếp trong popup extension.
 
 Nếu đã nạp extension cũ, bấm **Tải lại/Reload** tại trang Extensions sau khi app chuẩn bị lại thư mục.
+
+Bridge 3.2.2 dùng yt-dlp hiện hành cho video chất lượng cao thay cho URL iOS
+có thể bị YouTube từ chối giữa chừng. Nếu đang dùng bản yt-dlp cũ, chạy cập nhật
+công cụ trong app. Chức năng truyền media từ trình duyệt cũng kiểm tra kích thước
+qua HEAD/HTTP Range khi metadata không khai báo tổng dung lượng, tránh tải vượt cuối file.
+Nút **Ghép Video** dùng kết nối của app và proxy đã đặt trong **Cài đặt**; VPN chỉ
+cài trong trình duyệt không tự áp dụng cho tác vụ này.
 
 YouTube.js giúp thay đổi InnerTube client và xử lý URL stream, nhưng không đổi địa chỉ IP. Nếu chính tab trình duyệt
 cũng bị YouTube chặn theo quốc gia hoặc IP VPN, người dùng vẫn cần đổi sang máy chủ/IP được YouTube cho phép.

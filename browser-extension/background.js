@@ -1,5 +1,238 @@
 const NATIVE_HOST = 'com.ytdownloaderpro.browser_bridge';
 const MEDIA_CHUNK_BYTES = 256 * 1024;
+const CHUNK_FETCH_SIZE = 2 * 1024 * 1024;
+
+// Runs in the source tab, including after the popup has closed. Only return
+// URLs for the active video; never switch media representations while resuming.
+async function readPlaybackURLs(videoId, refresh) {
+  const player = document.getElementById('movie_player');
+  const current = player?.getPlayerResponse?.();
+  if (current?.videoDetails?.videoId !== videoId) return [];
+  const formats = data => [...(data?.streamingData?.formats || []), ...(data?.streamingData?.adaptiveFormats || [])];
+  const observed = performance.getEntriesByType('resource').map(entry => entry.name).reverse();
+  let fresh = [];
+  if (refresh) {
+    const context = window.ytcfg?.get('INNERTUBE_CONTEXT');
+    if (context) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+      try {
+        const response = await fetch('/youtubei/v1/player', {
+          method: 'POST', credentials: 'include', signal: controller.signal,
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ context, videoId })
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data?.videoDetails?.videoId === videoId) fresh = formats(data);
+        }
+      } catch (_) {
+        // The current player may still have a usable authenticated media URL.
+      } finally {
+        clearTimeout(timeout);
+      }
+    }
+  }
+  return [...observed, ...fresh.map(f => f.url), ...formats(current).map(f => f.url)]
+    .filter(value => {
+      try {
+        const url = new URL(value);
+        return url.protocol === 'https:' && url.hostname.endsWith('.googlevideo.com') &&
+          url.pathname === '/videoplayback' && url.searchParams.has('itag');
+      } catch (_) { return false; }
+    });
+}
+
+function compatiblePlaybackURL(original, candidate, contentLength) {
+  const left = new URL(original);
+  const right = new URL(candidate);
+  if (right.protocol !== 'https:' || !right.hostname.endsWith('.googlevideo.com') || right.pathname !== '/videoplayback') return false;
+  // itag alone does not identify a file (different videos/audio tracks can share it).
+  for (const key of ['id', 'itag', 'lmt']) {
+    if (!left.searchParams.get(key) || left.searchParams.get(key) !== right.searchParams.get(key)) return false;
+  }
+  if (left.searchParams.get('xtags') !== right.searchParams.get('xtags')) return false;
+  const expected = Number(contentLength) || Number(left.searchParams.get('clen'));
+  return expected > 0 && (!right.searchParams.has('clen') || Number(right.searchParams.get('clen')) === expected);
+}
+
+async function refreshPlaybackURL(capture, stream, refresh = true) {
+  if (!Number.isInteger(capture.tabId) || !chrome.scripting?.executeScript) return false;
+  try {
+    const videoId = new URL(capture.pageUrl).searchParams.get('v');
+    if (!videoId) return false;
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: capture.tabId }, world: 'MAIN',
+      func: readPlaybackURLs, args: [videoId, refresh]
+    });
+    for (const candidate of results?.[0]?.result || []) {
+      if (!compatiblePlaybackURL(stream.url, candidate, stream.contentLength)) continue;
+      const url = new URL(candidate);
+      for (const key of ['range', 'rn', 'rbuf']) url.searchParams.delete(key);
+      if (url.href === stream.url || stream.failedPlaybackURLs?.has(url.href)) continue;
+      stream.url = url.href;
+      return true;
+    }
+  } catch (_) {}
+  return false;
+}
+
+function mediaRequestURL(streamURL, offset, end, useRangeHeader) {
+  const url = new URL(streamURL);
+  url.searchParams.delete('range');
+  if (!useRangeHeader) url.searchParams.set('range', `${offset}-${end}`);
+  // Preserve the playback nonce/token supplied by the player. Inventing a new
+  // cpn detaches the request from that playback session.
+  return url.href;
+}
+
+function retryDelay(milliseconds, signal) {
+  return new Promise(resolve => {
+    const done = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', done);
+      resolve();
+    };
+    const timer = setTimeout(done, milliseconds);
+    signal?.addEventListener('abort', done, { once: true });
+    if (signal?.aborted) done();
+  });
+}
+
+function positiveMediaLength(value) {
+  const length = Number(value);
+  return Number.isSafeInteger(length) && length > 0 ? length : 0;
+}
+
+async function discoverMediaLength(stream, signal) {
+  const known = positiveMediaLength(stream.contentLength) || positiveMediaLength(new URL(stream.url).searchParams.get('clen'));
+  if (known) return known;
+  // Progressive ANDROID streams (itag 18) omit clen/contentLength. Asking for
+  // the full resource size avoids a range request beyond EOF, which returns 400.
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  signal?.addEventListener('abort', abort, { once: true });
+  if (signal?.aborted) abort();
+  const timeout = setTimeout(abort, 10000);
+  try {
+    const url = mediaRequestURL(stream.url, 0, 0, true);
+    for (const options of [{ method: 'HEAD' }, { method: 'GET', headers: { Range: 'bytes=0-0' } }]) {
+      if (controller.signal.aborted) return 0;
+      try {
+        const response = await fetch(url, { ...options, cache: 'no-store', credentials: 'omit', signal: controller.signal });
+        const range = response.headers.get('content-range') || '';
+        const mime = response.headers.get('content-type') || '';
+        const total = response.status === 206 && /^bytes 0-0\/\d+$/.test(range)
+          ? positiveMediaLength(range.split('/')[1])
+          : response.status === 200 && !range && /^(video\/|audio\/|application\/octet-stream)/i.test(mime)
+            ? positiveMediaLength(response.headers.get('content-length')) : 0;
+        await response.body?.cancel();
+        if (total) return total;
+      } catch (_) {}
+    }
+  } finally {
+    clearTimeout(timeout);
+    signal?.removeEventListener('abort', abort);
+  }
+  return 0;
+}
+
+async function fetchMediaRange(capture, stream, offset, end, signal) {
+  let useRangeHeader = Boolean(stream.useRangeHeader);
+  let lastError;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    if (signal?.aborted) throw new Error('Đã hủy tải.');
+    let response;
+    try {
+      response = await fetch(mediaRequestURL(stream.url, offset, end, useRangeHeader), {
+        method: 'GET', cache: 'no-store', credentials: 'omit', signal,
+        headers: useRangeHeader ? { accept: '*/*', Range: `bytes=${offset}-${end}` } : { accept: '*/*' }
+      });
+    } catch (error) {
+      lastError = error;
+      await retryDelay(1000 * (attempt + 1), signal);
+      continue;
+    }
+    const range = response.headers.get('content-range') || '';
+    const totalMatch = range.match(/\/(\d+)$/);
+    let total = totalMatch ? Number(totalMatch[1]) : positiveMediaLength(stream.contentLength);
+    if (response.status === 416) {
+      await response.body?.cancel();
+      if (offset > 0 && total === offset && (!stream.contentLength || Number(stream.contentLength) === offset)) {
+        return { bytes: new Uint8Array(), total, eof: true };
+      }
+      throw new Error(`YouTube trả về cuối luồng trước khi tải đủ dữ liệu (vị trí ${offset}, tổng ${total}).`);
+    }
+    if (!response.ok) {
+      await response.body?.cancel();
+      lastError = new Error(`Không thể tải luồng ${stream.hasVideo ? 'Video' : 'Audio'} itag ${stream.itag || '?'} (HTTP ${response.status}) tại vị trí ${(offset / (1024 * 1024)).toFixed(1)}MB.`);
+      if (![403, 429].includes(response.status) && response.status < 500) throw lastError;
+      if (response.status === 403) {
+        if (!useRangeHeader) {
+          useRangeHeader = true;
+        } else if (attempt < 4) {
+          stream.failedPlaybackURLs ||= new Set();
+          stream.failedPlaybackURLs.add(mediaRequestURL(stream.url, 0, 0, true));
+          const refreshed = await refreshPlaybackURL(capture, stream);
+          if (refreshed) {
+            appendBridgeLog('info', `Đã lấy lại URL itag ${stream.itag}; tiếp tục tại ${(offset / (1024 * 1024)).toFixed(1)}MB`);
+            useRangeHeader = false;
+          }
+        }
+      }
+      if (attempt < 4) await retryDelay(1000 * (attempt + 1), signal);
+      continue;
+    }
+    const match = range.match(/^bytes (\d+)-(\d+)\/(\d+|\*)$/);
+    if ((range && !match) || (match && (Number(match[1]) !== offset || Number(match[2]) > end || Number(match[2]) < offset)) ||
+        (useRangeHeader && offset > 0 && !match) ||
+        (total > 0 && stream.contentLength > 0 && total !== Number(stream.contentLength))) {
+      await response.body?.cancel();
+      throw new Error('Máy chủ trả về sai khoảng byte hoặc kích thước luồng; đã dừng để tránh ghép file hỏng.');
+    }
+    // Bound memory even if a server ignores the requested range and returns the whole file.
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error('Luồng media không có dữ liệu.');
+    const buffer = new Uint8Array(end - offset + 1);
+    let length = 0;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (length + value.length > buffer.length) {
+          await reader.cancel();
+          throw new Error('Máy chủ bỏ qua giới hạn byte của yêu cầu tải.');
+        }
+        buffer.set(value, length);
+        length += value.length;
+      }
+    } catch (error) {
+      await reader.cancel().catch(() => {});
+      lastError = error;
+      if (attempt < 4) await retryDelay(1000 * (attempt + 1), signal);
+      continue;
+    } finally {
+      reader.releaseLock();
+    }
+    const declaredLength = positiveMediaLength(response.headers.get('content-length'));
+    if (!length || (match && length !== Number(match[2]) - offset + 1) || (declaredLength && declaredLength !== length)) {
+      lastError = new Error('Luồng media bị ngắt trước khi nhận đủ khoảng byte yêu cầu.');
+      if (attempt < 4) await retryDelay(1000 * (attempt + 1), signal);
+      continue;
+    }
+    // A complete, explicitly sized short response is the final query-range
+    // chunk when the server supplies no total size. Never infer EOF for a
+    // known-size stream or a body that ended before its Content-Length.
+    if (!total && !range && !useRangeHeader && response.status === 200 && length < buffer.length &&
+        positiveMediaLength(response.headers.get('content-length')) === length &&
+        /^(video\/|audio\/|application\/octet-stream)/i.test(response.headers.get('content-type') || '')) {
+      total = offset + length;
+    }
+    stream.useRangeHeader = useRangeHeader;
+    return { bytes: buffer.subarray(0, length), total, eof: false };
+  }
+  throw lastError || new Error('Không thể tải luồng media.');
+}
 
 let transferStatus = {
   state: 'idle',
@@ -179,7 +412,6 @@ async function runNativeDownloadFlow({ pageUrl, title, quality, exportFormat = '
       await new Promise(r => setTimeout(r, 600));
       if (abortSignal.aborted) break;
 
-      try {
         const task = await bridge.send({ action: 'get-task-status', captureId });
         if (!task?.ok) continue;
 
@@ -208,13 +440,9 @@ async function runNativeDownloadFlow({ pageUrl, title, quality, exportFormat = '
         } else if (task.status === 'idle') {
           idleCount++;
           if (idleCount > 10) {
-            appendBridgeLog('warn', 'Task status idle quá lâu');
-            break;
+            throw new Error('App không còn tìm thấy tác vụ tải. Hãy mở lại app rồi thử lại.');
           }
         }
-      } catch (pollErr) {
-        if (abortSignal.aborted) break;
-      }
     }
   } catch (error) {
     if (abortSignal.aborted) return;
@@ -310,8 +538,9 @@ async function transferMedia(capture) {
   startKeepAlive();
   const bridge = openNativeBridge();
   currentBridge = bridge;
-  currentAbortController = typeof AbortController !== 'undefined' ? new AbortController() : null;
-  const abortSignal = currentAbortController ? currentAbortController.signal : null;
+  const abortController = new AbortController();
+  currentAbortController = abortController;
+  const abortSignal = abortController.signal;
 
   let captureId = '';
   const streamStats = capture.streams.map(s => ({
@@ -340,6 +569,12 @@ async function transferMedia(capture) {
   });
 
   try {
+    for (const [index, stream] of capture.streams.entries()) {
+      await refreshPlaybackURL(capture, stream, false);
+      stream.contentLength = await discoverMediaLength(stream, abortSignal);
+      streamStats[index].total = stream.contentLength;
+    }
+    if (abortSignal.aborted) return;
     const started = await bridge.send({
       action: 'transfer-start',
       pageUrl: capture.pageUrl,
@@ -372,88 +607,21 @@ async function transferMedia(capture) {
       appendBridgeLog('info', `Bắt đầu tải luồng ${streamIndex + 1}/${capture.streams.length} [${streamLabel}] (itag: ${stream.itag || '?'}, size: ${streamTotal ? (streamTotal / (1024 * 1024)).toFixed(1) + 'MB' : 'chưa rõ'})`);
 
       let offset = 0;
-      const CHUNK_FETCH_SIZE = 2 * 1024 * 1024; // 2MB range chunk giúp giảm số lượng request và tránh rate-limit HTTP 403
-      const cpn = Array.from({ length: 16 }, () => 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'[Math.floor(Math.random() * 64)]).join('');
-
       while (!abortSignal?.aborted) {
         let rangeEnd = offset + CHUNK_FETCH_SIZE - 1;
         if (streamTotal > 0 && rangeEnd >= streamTotal) {
           rangeEnd = streamTotal - 1;
         }
 
-        let chunkUrl = stream.url;
-        if (!chunkUrl.includes('cpn=')) {
-          chunkUrl += (chunkUrl.includes('?') ? '&' : '?') + `cpn=${cpn}`;
+        const chunk = await fetchMediaRange(capture, stream, offset, rangeEnd, abortSignal);
+        if (abortSignal.aborted) return;
+        if (chunk.total > 0) {
+          streamTotal = chunk.total;
+          stream.contentLength = streamTotal;
+          streamStats[streamIndex].total = streamTotal;
         }
-        if (/[?&]range=\d+-\d*/.test(chunkUrl)) {
-          chunkUrl = chunkUrl.replace(/([?&]range=)\d+-\d*/, `$1${offset}-${rangeEnd}`);
-        } else {
-          chunkUrl += (chunkUrl.includes('?') ? '&' : '?') + `range=${offset}-${rangeEnd}`;
-        }
-
-        const fetchOpts = {
-          method: 'GET',
-          cache: 'no-store',
-          credentials: 'omit',
-          headers: {
-            'accept': '*/*',
-            'origin': 'https://www.youtube.com',
-            'referer': 'https://www.youtube.com/',
-            'DNT': '1'
-          }
-        };
-        if (abortSignal) fetchOpts.signal = abortSignal;
-
-        let response = null;
-        let lastStatus = 0;
-        for (let attempt = 0; attempt < 3; attempt++) {
-          if (abortSignal?.aborted) break;
-          try {
-            response = await fetch(chunkUrl, fetchOpts);
-            lastStatus = response.status;
-            if (response.status === 416 || response.ok) {
-              break;
-            }
-            if (attempt < 2 && (response.status === 403 || response.status === 429 || response.status >= 500)) {
-              await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
-            }
-          } catch (fetchErr) {
-            if (abortSignal?.aborted) break;
-            if (attempt < 2) {
-              await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
-            } else {
-              throw fetchErr;
-            }
-          }
-        }
-
-        if (abortSignal?.aborted) return;
-        if (!response) {
-          throw new Error(`Không thể kết nối đến máy chủ YouTube cho luồng ${streamLabel}.`);
-        }
-        if (response.status === 416) {
-          // Range reached end of stream
-          break;
-        }
-
-        if (!response.ok) {
-          throw new Error(`Không thể tải luồng ${streamLabel} itag ${stream.itag || '?'} (HTTP ${lastStatus || response.status}) tại vị trí ${(offset / (1024 * 1024)).toFixed(1)}MB.`);
-        }
-
-        if (!streamTotal) {
-          const cr = response.headers.get('content-range') || '';
-          const match = cr.match(/\/(\d+)$/);
-          if (match) {
-            streamTotal = Number(match[1]);
-            streamStats[streamIndex].total = streamTotal;
-          }
-        }
-
-        const arrayBuffer = await response.arrayBuffer();
-        const chunkBytes = new Uint8Array(arrayBuffer);
-        if (chunkBytes.length === 0) {
-          break;
-        }
+        if (chunk.eof) break;
+        const chunkBytes = chunk.bytes;
 
         // Gửi sang native bridge theo từng slice nhỏ (256KB)
         for (let sliceOffset = 0; sliceOffset < chunkBytes.length; sliceOffset += MEDIA_CHUNK_BYTES) {
@@ -465,6 +633,7 @@ async function transferMedia(capture) {
             streamIndex,
             data: bytesToBase64(slice)
           });
+          if (abortSignal.aborted) return;
           streamStats[streamIndex].received += slice.length;
           streamReceived += slice.length;
           updateProgress();
@@ -475,13 +644,13 @@ async function transferMedia(capture) {
         if (streamTotal > 0 && offset >= streamTotal) {
           break;
         }
-        if (chunkBytes.length < (rangeEnd - (offset - chunkBytes.length) + 1)) {
-          break;
-        }
       }
 
       if (abortSignal?.aborted) return;
 
+      if (streamTotal > 0 && streamReceived !== streamTotal) {
+        throw new Error(`Luồng ${streamLabel} chưa đủ dữ liệu: ${streamReceived}/${streamTotal} bytes.`);
+      }
       await bridge.send({ action: 'transfer-stream-end', captureId, streamIndex });
       appendBridgeLog('info', `Đã tải xong luồng ${streamIndex + 1}/${capture.streams.length} [${streamLabel}] (${(streamReceived / (1024 * 1024)).toFixed(1)}MB)`);
     }));
@@ -511,6 +680,7 @@ async function transferMedia(capture) {
       appendBridgeLog('info', 'Tiến trình tải đã dừng do lệnh hủy');
       return;
     }
+    abortController.abort(); // Stop sibling streams before closing the native transfer.
     const errorMsg = error?.message || String(error);
     appendBridgeLog('error', 'Lỗi trong quá trình gửi media: ' + errorMsg);
     if (captureId) {
@@ -523,11 +693,11 @@ async function transferMedia(capture) {
       captureId: ''
     };
   } finally {
-    currentAbortController = null;
+    if (currentAbortController === abortController) currentAbortController = null;
     if (currentBridge === bridge) {
       currentBridge = null;
+      stopKeepAlive();
     }
     bridge.disconnect();
-    stopKeepAlive();
   }
 }
